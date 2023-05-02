@@ -226,6 +226,8 @@ function createTriggers()
   ScriptApp.newTrigger('importInventory').timeBased().atHour(9).everyDays(1).create();
   ScriptApp.newTrigger('importYetiUPCs').timeBased().atHour(9).everyDays(1).create(); 
   ScriptApp.newTrigger('updateVendors').timeBased().atHour(10).everyDays(1).create();
+  ScriptApp.newTrigger('onChange').forSpreadsheet('1WB8DU1rAoRLr3a9t7K5Aa3wCOl08-pqgeV_7Yk4ink8').onChange().create()
+  ScriptApp.newTrigger('onEdit_Installed').forSpreadsheet('1WB8DU1rAoRLr3a9t7K5Aa3wCOl08-pqgeV_7Yk4ink8').onEdit().create()
 }
 
 /**
