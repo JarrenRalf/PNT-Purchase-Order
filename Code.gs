@@ -14,12 +14,6 @@ function onChange(e)
     makeCommentLines(e)
 }
 
-function deleteHiddenSheet()
-{
-  const spreadsheet = SpreadsheetApp.getActive();
-  spreadsheet.deleteSheet(spreadsheet.getSheetByName('Price List'));
-}
-
 /**
  * This function handles the onEdit trigger event. It checks for someone performing a search on one of the search pages.
  * It also updates the PNT descriptions on the vendor pages if a user is making a change on a particlar vendor's sheet.
@@ -230,6 +224,7 @@ function addVendor()
 function createTriggers()
 {
   ScriptApp.newTrigger('importInventory').timeBased().atHour(9).everyDays(1).create();
+  ScriptApp.newTrigger('importYetiUPCs').timeBased().atHour(9).everyDays(1).create(); 
   ScriptApp.newTrigger('updateVendors').timeBased().atHour(10).everyDays(1).create();
 }
 
@@ -276,6 +271,16 @@ function clearSearchSheetQTYs()
 {
   const sheet = SpreadsheetApp.getActiveSheet();
   if (sheet.getLastRow() - 4 !== 0) sheet.getRange(5, 3, sheet.getLastRow() - 4).clearContent()
+}
+
+/**
+ * This function deletes all of the Triggers associated with the project.
+ * 
+ * @author Jarren Ralf
+ */
+function deleteAllTriggers()
+{
+  ScriptApp.getProjectTriggers().map(trigger => ScriptApp.deleteTrigger(trigger))
 }
 
 /**
@@ -960,6 +965,8 @@ function getSkuNotFoundMessage(row, sheet, sheetName)
  */
 function getVendorName(values)
 {
+  Logger.log(values[1][0])
+  
   if (values[1][0] === 'Grundens')
     return 'Grundens';
   else if (values[0].includes("Seasons") && values[0].includes("Segmentation") && values[0].includes("Technology"))
@@ -1549,6 +1556,46 @@ function importInventory()
 }
 
 /**
+ * This function reduces the set of all barcodes down to just the Yeti UPC codes, then adds the inventory values to that data and stores the information on a hidden sheet.
+ * 
+ * @author Jarren Ralf
+ */
+function importYetiUPCs()
+{
+  var item;
+  const inventory = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString());
+  const data = Utilities.parseCsv(DriveApp.getFilesByName("BarcodeInput.csv").next().getBlob().getDataAsString())
+    .filter(descrip => descrip[2].toUpperCase().includes('YETI')) // Grab only the items that contain YETI in the description
+    .map(value => {
+      item = inventory.find(sku => sku[6].toUpperCase() === value[1].toUpperCase()) // Match the SKUs in our inventory
+      return [value[0], value[3], item[1], '', item[2], item[3], item[4]] // Return the item and the associated inventory values
+    })
+  
+  SpreadsheetApp.getActive().getSheetByName('Yeti UPCs').getRange(2, 1, data.length, 7).setNumberFormat('@').setValues(data)
+}
+
+/**
+ * This function checks to see if the active sheet is blank. This is done in order to determine if the user needs the Last Imported data to retrieve the header information or not.
+ * 
+ * @param {Sheet} sheet : The active sheet.
+ * @author Jarren Ralf
+ */
+function isCurrentExportBlank(sheet)
+{
+  const header = sheet.getSheetValues(1, 2, 2, 4);
+
+  const isOrderBlank = header[0][0] === '' &&
+                       header[0][1] === '' &&
+                       header[0][2] === 'Type your order description in this cell. (40 characters max)' &&
+                       header[0][3] === '' &&
+                       header[1][0] === 'Type your order comments in this cell. (75 characters max)' &&
+                       header[1][1] === '' &&
+                       header[1][2] === '';
+
+  return isOrderBlank;
+}
+
+/**
  * This function checks if every value in the import multi-array is blank, which means that the user has
  * highlighted and deleted all of the data.
  * 
@@ -1586,6 +1633,21 @@ function isNewPurchaseOrder(data, i, poNum)
 function isNotBlank(value)
 {
   return value !== '';
+}
+
+/**
+ * This function returns true if the presented number is a UPC-A, false otherwise.
+ * 
+ * @param {Number} upcNumber : The UPC-A number
+ * @returns Whether the given value is a UPC-A or not
+ * @author Jarren Ralf
+ */
+function isUPC_A(upcNumber)
+{
+  for (var i = 0, sum = 0, upc = upcNumber.toString(); i < upc.length - 1; i++)
+    sum += (i % 2 === 0) ? Number(upc[i])*3 : Number(upc[i])
+
+  return upc.endsWith(Math.ceil(sum/10)*10 - sum)
 }
 
 /**
@@ -1666,6 +1728,7 @@ function manageExportSheetEdit(e, sheetNumber)
             .setVerticalAlignment('middle').setBackground(null).setValues(values); // Put the imported values on the Last Import sheet
           sheet.getRange(row, 1, rowEnd - row + 1, NUM_COLS).clearContent()
           const vendorName = getVendorName(values)
+          Logger.log(vendorName)
           exportInfo(vendorName, values, sheet, false, spreadsheet);
         }
         else // Check the second export sheet because the first one has a current user
@@ -1682,6 +1745,7 @@ function manageExportSheetEdit(e, sheetNumber)
               .setVerticalAlignment('middle').setBackground(null).setValues(values); // Put the imported values on the Last Import sheet
             sheet.getRange(row, 1, rowEnd - row + 1, NUM_COLS).clearContent()
             const vendorName = getVendorName(values)
+            Logger.log(vendorName)
             exportInfo(vendorName, values, exportSheet, false, spreadsheet);
           }
           else // Both the export sheets are in use, therefore, an import like this can not occur. The user must physically go ask someone to stop using, or hit the "done" button.
@@ -2001,27 +2065,6 @@ function refresh()
 }
 
 /**
- * This function checks to see if the active sheet is blank. This is done in order to determine if the user needs the Last Imported data to retrieve the header information or not.
- * 
- * @param {Sheet} sheet : The active sheet.
- * @author Jarren Ralf
- */
-function isCurrentExportBlank(sheet)
-{
-  const header = sheet.getSheetValues(1, 2, 2, 4);
-
-  const isOrderBlank = header[0][0] === '' &&
-                       header[0][1] === '' &&
-                       header[0][2] === 'Type your order description in this cell. (40 characters max)' &&
-                       header[0][3] === '' &&
-                       header[1][0] === 'Type your order comments in this cell. (75 characters max)' &&
-                       header[1][1] === '' &&
-                       header[1][2] === '';
-
-  return isOrderBlank;
-}
-
-/**
  * This function first applies the standard formatting to the search box, then it seaches the Inventory page for the items in question.
  * 
  * @param {Event Object}      e      : An instance of an event object that occurs when the spreadsheet is editted.
@@ -2037,142 +2080,343 @@ function search(e, sheet)
   var row = range.rowStart;
   var col = range.columnStart;
   var rowEnd = range.rowEnd;
+  var colEnd = range.columnEnd;
   var isSingleRow    = row == rowEnd;
-  var isSingleColumn = col == range.columnEnd;
+  var isSingleColumn = col == colEnd;
 
   try
   {
-    if (row === 1 && col === 2 && ((isSingleRow && isSingleColumn) || (rowEnd === 2 && (range.colEnd === 3 || range.colEnd == null))))
+    if (isSingleRow)
     {
-      const startTime = new Date().getTime();
-      const searchResultsDisplayRange = sheet.getRange(1, 1); // The range that will display the number of items found by the search
-      const functionRunTimeRange = sheet.getRange(3, 1);      // The range that will display the runtimes for the search and formatting
-      const itemSearchFullRange = sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6); // The entire range of the Item Search page
-      const output = [];
-      const searchesOrNot = sheet.getRange(1, 2, 2, 2).clearFormat()                                    // Clear the formatting of the range of the search box
-        .setBorder(true, true, true, true, null, null, 'black', SpreadsheetApp.BorderStyle.SOLID_THICK) // Set the border
-        .setFontFamily("Arial").setFontColor("black").setFontWeight("bold").setFontSize(14)             // Set the various font parameters
-        .setHorizontalAlignment("center").setVerticalAlignment("middle")                                // Set the alignment
-        .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)                                              // Set the wrap strategy
-        .merge().trimWhitespace()                                                                       // Merge and trim the whitespaces at the end of the string
-        .getValue().toString().toLowerCase().split(' not ')                                             // Split the search string at the word 'not'
-
-      const searches = searchesOrNot[0].split(' or ').map(words => words.split(/\s+/)) // Split the search values up by the word 'or' and split the results of that split by whitespace
-
-      if (isNotBlank(searches[0][0])) // If the value in the search box is NOT blank, then compute the search
+      if (row === 1 && col === 2 && (isSingleColumn || (rowEnd === 2 && (range.colEnd === 3 || range.colEnd == null))))
       {
-        spreadsheet.toast('Searching...')
+        const startTime = new Date().getTime();
+        const searchResultsDisplayRange = sheet.getRange(1, 1); // The range that will display the number of items found by the search
+        const functionRunTimeRange = sheet.getRange(3, 1);      // The range that will display the runtimes for the search and formatting
+        const itemSearchFullRange = sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6); // The entire range of the Item Search page
+        const output = [];
+        const searchesOrNot = sheet.getRange(1, 2, 2, 2).clearFormat()                                    // Clear the formatting of the range of the search box
+          .setBorder(true, true, true, true, null, null, 'black', SpreadsheetApp.BorderStyle.SOLID_THICK) // Set the border
+          .setFontFamily("Arial").setFontColor("black").setFontWeight("bold").setFontSize(14)             // Set the various font parameters
+          .setHorizontalAlignment("center").setVerticalAlignment("middle")                                // Set the alignment
+          .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP)                                              // Set the wrap strategy
+          .merge().trimWhitespace()                                                                       // Merge and trim the whitespaces at the end of the string
+          .getValue().toString().toLowerCase().split(' not ')                                             // Split the search string at the word 'not'
 
-        if (searchesOrNot.length === 1) // The word 'not' WASN'T found in the string
+        const searches = searchesOrNot[0].split(' or ').map(words => words.split(/\s+/)) // Split the search values up by the word 'or' and split the results of that split by whitespace
+
+        if (isNotBlank(searches[0][0])) // If the value in the search box is NOT blank, then compute the search
         {
-          const inventorySheet = spreadsheet.getSheetByName('Inventory');
-          const data = inventorySheet.getSheetValues(2, 1, inventorySheet.getLastRow() - 1, 6);
-          const numSearches = searches.length; // The number searches
-          var numSearchWords;
+          spreadsheet.toast('Searching...')
 
-          for (var i = 0; i < data.length; i++) // Loop through all of the descriptions from the search data
+          if (searchesOrNot.length === 1) // The word 'not' WASN'T found in the string
           {
-            loop: for (var j = 0; j < numSearches; j++) // Loop through the number of searches
+            const inventorySheet = spreadsheet.getSheetByName('Inventory');
+            const data = inventorySheet.getSheetValues(2, 1, inventorySheet.getLastRow() - 1, 6);
+            const numSearches = searches.length; // The number searches
+            var numSearchWords;
+
+            for (var i = 0; i < data.length; i++) // Loop through all of the descriptions from the search data
             {
-              numSearchWords = searches[j].length - 1;
-
-              for (var k = 0; k <= numSearchWords; k++) // Loop through each word in each set of searches
+              loop: for (var j = 0; j < numSearches; j++) // Loop through the number of searches
               {
-                if (data[i][1].toString().toLowerCase().includes(searches[j][k])) // Does the i-th item description contain the k-th search word in the j-th search
+                numSearchWords = searches[j].length - 1;
+
+                for (var k = 0; k <= numSearchWords; k++) // Loop through each word in each set of searches
                 {
-                  if (k === numSearchWords) // The last search word was succesfully found in the ith item, and thus, this item is returned in the search
+                  if (data[i][1].toString().toLowerCase().includes(searches[j][k])) // Does the i-th item description contain the k-th search word in the j-th search
                   {
-                    output.push(data[i]);
-                    break loop;
-                  }
-                }
-                else
-                  break; // One of the words in the User's query was NOT contained in the ith item description, therefore move on to the next item
-              }
-            }
-          }
-        }
-        else // The word 'not' was found in the search string
-        {
-          var dontIncludeTheseWords = searchesOrNot[1].split(/\s+/);
-
-          const inventorySheet = spreadsheet.getSheetByName('Inventory');
-          const data = inventorySheet.getSheetValues(2, 1, inventorySheet.getLastRow() - 1, 6);
-          const numSearches = searches.length; // The number searches
-          var numSearchWords;
-
-          for (var i = 0; i < data.length; i++) // Loop through all of the descriptions from the search data
-          {
-            loop: for (var j = 0; j < numSearches; j++) // Loop through the number of searches
-            {
-              numSearchWords = searches[j].length - 1;
-
-              for (var k = 0; k <= numSearchWords; k++) // Loop through each word in each set of searches
-              {
-                if (data[i][1].toString().toLowerCase().includes(searches[j][k])) // Does the i-th item description contain the k-th search word in the j-th search
-                {
-                  if (k === numSearchWords) // The last search word was succesfully found in the ith item, and thus, this item is returned in the search
-                  {
-                    for (var l = 0; l < dontIncludeTheseWords.length; l++)
+                    if (k === numSearchWords) // The last search word was succesfully found in the ith item, and thus, this item is returned in the search
                     {
-                      if (!data[i][1].toString().toLowerCase().includes(dontIncludeTheseWords[l]))
-                      {
-                        if (l === dontIncludeTheseWords.length - 1)
-                        {
-                          output.push(data[i]);
-                          break loop;
-                        }
-                      }
-                      else
-                        break;
+                      output.push(data[i]);
+                      break loop;
                     }
                   }
+                  else
+                    break; // One of the words in the User's query was NOT contained in the ith item description, therefore move on to the next item
                 }
-                else
-                  break; // One of the words in the User's query was NOT contained in the ith item description, therefore move on to the next item 
               }
             }
           }
+          else // The word 'not' was found in the search string
+          {
+            var dontIncludeTheseWords = searchesOrNot[1].split(/\s+/);
+
+            const inventorySheet = spreadsheet.getSheetByName('Inventory');
+            const data = inventorySheet.getSheetValues(2, 1, inventorySheet.getLastRow() - 1, 6);
+            const numSearches = searches.length; // The number searches
+            var numSearchWords;
+
+            for (var i = 0; i < data.length; i++) // Loop through all of the descriptions from the search data
+            {
+              loop: for (var j = 0; j < numSearches; j++) // Loop through the number of searches
+              {
+                numSearchWords = searches[j].length - 1;
+
+                for (var k = 0; k <= numSearchWords; k++) // Loop through each word in each set of searches
+                {
+                  if (data[i][1].toString().toLowerCase().includes(searches[j][k])) // Does the i-th item description contain the k-th search word in the j-th search
+                  {
+                    if (k === numSearchWords) // The last search word was succesfully found in the ith item, and thus, this item is returned in the search
+                    {
+                      for (var l = 0; l < dontIncludeTheseWords.length; l++)
+                      {
+                        if (!data[i][1].toString().toLowerCase().includes(dontIncludeTheseWords[l]))
+                        {
+                          if (l === dontIncludeTheseWords.length - 1)
+                          {
+                            output.push(data[i]);
+                            break loop;
+                          }
+                        }
+                        else
+                          break;
+                      }
+                    }
+                  }
+                  else
+                    break; // One of the words in the User's query was NOT contained in the ith item description, therefore move on to the next item 
+                }
+              }
+            }
+          }
+
+          const numItems = output.length;
+
+          if (numItems === 0) // No items were found
+          {
+            sheet.getRange('B1').activate(); // Move the user back to the seachbox
+            itemSearchFullRange.clearContent(); // Clear content
+            const textStyle = SpreadsheetApp.newTextStyle().setBold(true).setForegroundColor('yellow').build();
+            const message = SpreadsheetApp.newRichTextValue().setText("No results found.\nPlease try again.").setTextStyle(0, 16, textStyle).build();
+            searchResultsDisplayRange.setRichTextValue(message);
+          }
+          else
+          {
+            sheet.getRange('B5').activate(); // Move the user to the top of the search items
+            itemSearchFullRange.clearContent().setBackground('white'); // Clear content and reset the text format
+            sheet.getRange(5, 1, numItems, 6).setNumberFormat('@').setValues(output);
+            (numItems !== 1) ? searchResultsDisplayRange.setValue(numItems + " results found.") : searchResultsDisplayRange.setValue(numItems + " result found.");
+          }
+
+          spreadsheet.toast('Searching Complete.')
         }
-
-        const numItems = output.length;
-
-        if (numItems === 0) // No items were found
+        else if (isNotBlank(e.oldValue) && userHasPressedDelete(e.value)) // If the user deletes the data in the search box, then the recently created items are displayed
         {
-          sheet.getRange('B1').activate(); // Move the user back to the seachbox
-          itemSearchFullRange.clearContent(); // Clear content
-          const textStyle = SpreadsheetApp.newTextStyle().setBold(true).setForegroundColor('yellow').build();
-          const message = SpreadsheetApp.newRichTextValue().setText("No results found.\nPlease try again.").setTextStyle(0, 16, textStyle).build();
-          searchResultsDisplayRange.setRichTextValue(message);
+          const MAX_NUM_ITEMS = 5000;
+          const recentSheet = spreadsheet.getSheetByName('Recent')
+          const recentItems = recentSheet.getSheetValues(2, 1, MAX_NUM_ITEMS, 6)
+          itemSearchFullRange.clearContent().setBackground('white');
+          sheet.getRange(5, 1, MAX_NUM_ITEMS, 6).setNumberFormat('@').setValues(recentItems);
+          searchResultsDisplayRange.setValue(MAX_NUM_ITEMS + " recently created items.");
         }
         else
         {
-          sheet.getRange('B5').activate(); // Move the user to the top of the search items
-          itemSearchFullRange.clearContent().setBackground('white'); // Clear content and reset the text format
-          sheet.getRange(5, 1, numItems, 6).setNumberFormat('@').setValues(output);
-          (numItems !== 1) ? searchResultsDisplayRange.setValue(numItems + " results found.") : searchResultsDisplayRange.setValue(numItems + " result found.");
+          itemSearchFullRange.clearContent(); // Clear content 
+          const textStyle = SpreadsheetApp.newTextStyle().setBold(true).setForegroundColor('yellow').build();
+          const message = SpreadsheetApp.newRichTextValue().setText("Invalid search.\nPlease try again.").setTextStyle(0, 14, textStyle).build();
+          searchResultsDisplayRange.setRichTextValue(message);
         }
 
-        spreadsheet.toast('Searching Complete.')
+        functionRunTimeRange.setValue((new Date().getTime() - startTime)/1000 + " seconds");
       }
-      else if (isNotBlank(e.oldValue) && userHasPressedDelete(e.value)) // If the user deletes the data in the search box, then the recently created items are displayed
+    }
+    else if (row > 4) // multiple rows are being edited
+    {
+      if (isSingleColumn)
       {
-        const MAX_NUM_ITEMS = 5000;
-        const recentSheet = spreadsheet.getSheetByName('Recent')
-        const recentItems = recentSheet.getSheetValues(2, 1, MAX_NUM_ITEMS, 6)
-        itemSearchFullRange.clearContent().setBackground('white');
-        sheet.getRange(5, 1, MAX_NUM_ITEMS, 6).setNumberFormat('@').setValues(recentItems);
-        searchResultsDisplayRange.setValue(MAX_NUM_ITEMS + " recently created items.");
+        const values = range.getValues().filter(blank => isNotBlank(blank[0]))
+
+        if (values.length !== 0) // Don't run function if every value is blank, probably means the user pressed the delete key on a large selection
+        {
+          if (isUPC_A(values[0][0])) // The first value is a UPC-A, so assume all the pasted values are
+          {
+            const yetiUpcSheet = spreadsheet.getSheetByName('Yeti UPCs')
+            const data = spreadsheet.getSheetByName('Yeti UPCs').getSheetValues(2, 1, yetiUpcSheet.getLastRow() - 1, 7)
+            var someUpcsNotFound = false, upc;
+            
+            const upcs = values.map(item => {
+            
+              for (var i = 0; i < data.length; i++)
+                if (item[0] == data[i][0])
+                  return data[i].slice(1);
+
+              someUpcsNotFound = true;
+
+              return ['UPC Not Found:', upc, '', '', '', '']
+            });
+
+            if (someUpcsNotFound)
+            {
+              const upcsNotFound = [];
+              var isUpcFound;
+
+              const upcsFound = upcs.filter(item => {
+                isUpcFound = item[0] !== 'UPC Not Found:'
+
+                if (!isUpcFound)
+                  upcsNotFound.push(item)
+
+                return isUpcFound;
+              })
+
+              const numUpcsFound = upcsFound.length;
+              const numUpcsNotFound = upcsNotFound.length;
+              const items = [].concat.apply([], [upcsNotFound, upcsFound]); // Concatenate all of the item values as a 2-D array
+              const numItems = items.length
+              const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'center', 'center', 'center', 'center'])
+              const WHITE = new Array(6).fill('white')
+              const YELLOW = new Array(6).fill('#ffe599')
+              const colours = [].concat.apply([], [new Array(numUpcsNotFound).fill(YELLOW), new Array(numUpcsFound).fill(WHITE)]); // Concatenate all of the item values as a 2-D array
+
+              sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6).clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
+                .offset(0, 0, numItems, 6)
+                  .setFontFamily('Arial').setFontWeight('bold').setFontSize(10).setHorizontalAlignments(horizontalAlignments).setBackgrounds(colours).setValues(items)
+                .offset(numUpcsNotFound, 0, numUpcsFound, 6).activate()
+            }
+            else // All UPCs were succefully found
+            {
+              const numItems = upcs.length
+              const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'center', 'center', 'center', 'center'])
+
+              sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6).clearContent().setBackground('white').setFontColor('black').offset(0, 0, numItems, 6)
+                .setFontFamily('Arial').setFontWeight('bold').setFontSize(10).setHorizontalAlignments(horizontalAlignments).setValues(upcs).activate()
+            }
+          }
+          else // Probably SKU numbers
+          {
+            const data = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString());
+            var someSKUsNotFound = false, skus;
+            
+            if (values[0][0].toString().includes('-'))
+            {
+              skus = values.map(sku => sku[0].substring(0,4) + sku[0].substring(5,9) + sku[0].substring(10)).map(item => {
+              
+                for (var i = 0; i < data.length; i++)
+                  if (data[i][6] == item.toString().toUpperCase())
+                    return [data[i][0], data[i][1], '',  data[i][2], data[i][3], data[i][4]]
+
+                someSKUsNotFound = true;
+
+                return ['SKU Not Found:', item, '', '', '', '']
+              });
+            }
+            else
+            {
+              skus = values.map(item => {
+              
+                for (var i = 0; i < data.length; i++)
+                  if (data[i][6] == item[0].toString().toUpperCase())
+                    return [data[i][0], data[i][1], '',  data[i][2], data[i][3], data[i][4]]
+
+                someSKUsNotFound = true;
+
+                return ['SKU Not Found:', item[0], '', '', '', '']
+              });
+            }
+
+            if (someSKUsNotFound)
+            {
+              const skusNotFound = [];
+              var isSkuFound;
+
+              const skusFound = skus.filter(item => {
+                isSkuFound = item[0] !== 'SKU Not Found:'
+
+                if (!isSkuFound)
+                  skusNotFound.push(item)
+
+                return isSkuFound;
+              })
+
+              const numSkusFound = skusFound.length;
+              const numSkusNotFound = skusNotFound.length;
+              const items = [].concat.apply([], [skusNotFound, skusFound]); // Concatenate all of the item values as a 2-D array
+              const numItems = items.length
+              const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'center', 'center', 'center', 'center'])
+              const WHITE = new Array(6).fill('white')
+              const YELLOW = new Array(6).fill('#ffe599')
+              const colours = [].concat.apply([], [new Array(numSkusNotFound).fill(YELLOW), new Array(numSkusFound).fill(WHITE)]); // Concatenate all of the item values as a 2-D array
+
+              sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6).clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
+                .offset(0, 0, numItems, 6)
+                  .setFontFamily('Arial').setFontWeight('bold').setFontSize(10).setHorizontalAlignments(horizontalAlignments).setBackgrounds(colours).setValues(items)
+                .offset(numSkusNotFound, 0, numSkusFound, 6).activate()
+            }
+            else // All SKUs were succefully found
+            {
+              const numItems = skus.length
+              const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'center', 'center', 'center', 'center'])
+
+              sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6).clearContent().setBackground('white').setFontColor('black').offset(0, 0, numItems, 6)
+                .setFontFamily('Arial').setFontWeight('bold').setFontSize(10).setHorizontalAlignments(horizontalAlignments).setValues(skus).activate()
+            }
+          }
+        }
       }
       else
       {
-        itemSearchFullRange.clearContent(); // Clear content 
-        const textStyle = SpreadsheetApp.newTextStyle().setBold(true).setForegroundColor('yellow').build();
-        const message = SpreadsheetApp.newRichTextValue().setText("Invalid search.\nPlease try again.").setTextStyle(0, 14, textStyle).build();
-        searchResultsDisplayRange.setRichTextValue(message);
-      }
+        const quantityIndex = colEnd - col; // Assume that the quantity is the final column
+        const values = range.getValues().filter(blank => isNotBlank(blank[0]))
 
-      functionRunTimeRange.setValue((new Date().getTime() - startTime)/1000 + " seconds");
+        /* Don't run function if every value is blank, probably means the user pressed the delete key on a large selection
+         * The first value is a UPC-A, so assume all the pasted values are
+         */
+        if (values.length !== 0 && isUPC_A(values[0][0])) 
+        {
+          const yetiUpcSheet = spreadsheet.getSheetByName('Yeti UPCs')
+          const data = spreadsheet.getSheetByName('Yeti UPCs').getSheetValues(2, 1, yetiUpcSheet.getLastRow() - 1, 7)
+          var someUpcsNotFound = false, upc;
+          
+          const upcs = values.map(item => {
+          
+            for (var i = 0; i < data.length; i++)
+              if (item[0] == data[i][0])
+                return [data[i][1], item[quantityIndex], '', data[i][2], data[i][2], data[i][2]];
+
+            someUpcsNotFound = true;
+
+            return ['UPC Not Found:', upc, '', '', '', '']
+          });
+
+          if (someUpcsNotFound)
+          {
+            const upcsNotFound = [];
+            var isUpcFound;
+
+            const upcsFound = upcs.filter(item => {
+              isUpcFound = item[0] !== 'UPC Not Found:'
+
+              if (!isUpcFound)
+                upcsNotFound.push(item)
+
+              return isUpcFound;
+            })
+
+            const numUpcsFound = upcsFound.length;
+            const numUpcsNotFound = upcsNotFound.length;
+            const items = [].concat.apply([], [upcsNotFound, upcsFound]); // Concatenate all of the item values as a 2-D array
+            const numItems = items.length
+            const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'center', 'center', 'center', 'center'])
+            const WHITE = new Array(6).fill('white')
+            const YELLOW = new Array(6).fill('#ffe599')
+            const colours = [].concat.apply([], [new Array(numUpcsNotFound).fill(YELLOW), new Array(numUpcsFound).fill(WHITE)]); // Concatenate all of the item values as a 2-D array
+
+            sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6).clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
+              .offset(0, 0, numItems, 6)
+                .setFontFamily('Arial').setFontWeight('bold').setFontSize(10).setHorizontalAlignments(horizontalAlignments).setBackgrounds(colours).setValues(items)
+              .offset(numUpcsNotFound, 0, numUpcsFound, 6).activate()
+          }
+          else // All UPCs were succefully found
+          {
+            const numItems = upcs.length
+            const horizontalAlignments = new Array(numItems).fill(['center', 'left', 'center', 'center', 'center', 'center'])
+
+            sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6).clearContent().setBackground('white').setFontColor('black').offset(0, 0, numItems, 6)
+              .setFontFamily('Arial').setFontWeight('bold').setFontSize(10).setHorizontalAlignments(horizontalAlignments).setValues(upcs).activate()
+          }
+        }
+      }
     }
   }
   catch (err)
