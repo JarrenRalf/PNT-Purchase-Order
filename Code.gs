@@ -2374,11 +2374,11 @@ function search(e, sheet)
           
             for (var i = 0; i < data.length; i++)
               if (item[0] == data[i][0])
-                return [data[i][1], item[quantityIndex], '', data[i][2], data[i][2], data[i][2]];
+                return [data[i][1], data[i][2], item[quantityIndex], data[i][5], data[i][5], data[i][6]];
 
             someUpcsNotFound = true;
 
-            return ['UPC Not Found:', upc, '', '', '', '']
+            return ['UPC Not Found:', item[0], '', '', '', '']
           });
 
           if (someUpcsNotFound)
