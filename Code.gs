@@ -65,7 +65,8 @@ function onOpen()
   var menuEntries = [ {name: "Add / Update Vendor",           functionName: "addVendor"}, null, 
                       {name: "Refresh (Update Missing SKUs)", functionName: "refresh"},   null, 
                       {name: "Undone",                        functionName: "undone"},    null,
-                      {name: "Update Inventory",              functionName: "importInventory"}];
+                      {name: "Update Inventory",              functionName: "importInventory"},
+                      {name: "Update Yeti UPCs",              functionName: "importYetiUPCs"}];
   SpreadsheetApp.getActive().addMenu("Pacific Net & Twine Custom Menu Options", menuEntries);
 }
 

@@ -1,26 +1,26 @@
 {
   "timeZone": "America/Los_Angeles",
-  "dependencies": {},
+  "dependencies": {
+  },
+  "webapp": {
+    "access": "ANYONE_ANONYMOUS",
+    "executeAs": "USER_DEPLOYING"
+  },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "sheets": {
-    "macros": [
-      {
-        "menuName": "Untitled Macro",
-        "functionName": "UntitledMacro"
-      },
-      {
-        "menuName": "importInventory",
-        "functionName": "importInventory"
-      },
-      {
-        "menuName": "update",
-        "functionName": "update"
-      }
-    ]
-  },
-  "webapp": {
-    "executeAs": "USER_DEPLOYING",
-    "access": "ANYONE_ANONYMOUS"
+    "macros": [{
+      "menuName": "Untitled Macro",
+      "functionName": "UntitledMacro"
+    }, {
+      "menuName": "importInventory",
+      "functionName": "importInventory"
+    }, {
+      "menuName": "update",
+      "functionName": "update"
+    }, {
+      "menuName": "importYetiUPCs",
+      "functionName": "importYetiUPCs"
+    }]
   }
 }
