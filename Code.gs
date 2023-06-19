@@ -1891,6 +1891,8 @@ function processImportedData(e)
     var sheets = spreadsheet.getSheets();
     var info, numRows = 0, numCols = 1, maxRow = 2, maxCol = 3, NUM_IMPORTS = 1;
 
+    spreadsheet.toast('Looking for Import...')
+
     for (var sheet = 0; sheet < sheets.length; sheet++) // Loop through all of the sheets in this spreadsheet and find the new one
     {
       info = [
@@ -1903,6 +1905,8 @@ function processImportedData(e)
       // A new sheet is imported by File -> Import -> Insert new sheet(s) - The left disjunct is for a csv and the right disjunct is for an excel file
       if ((info[maxRow] - info[numRows] === 2 && info[maxCol] - info[numCols] === 2) || (info[maxRow] === 1000 && info[maxCol] >= 26 && info[numRows] !== 0 && info[numCols] !== 0)) 
       {
+        spreadsheet.toast('Possible Import Detected...')
+
         if (NUM_IMPORTS === 1) // Only allow 1 export per onChange edit
         {
           NUM_IMPORTS++; // Increment counter so no more exports are attempted
@@ -1918,6 +1922,8 @@ function processImportedData(e)
               .setVerticalAlignment('middle').setBackground(null).setValues(values);
             var vendorName = getVendorName(values)
 
+            spreadsheet.toast('Importing ' + vendorName + '...')
+
             exportInfo(vendorName, values, exportSheet, false, spreadsheet, sheets[sheet]);
           }
           else // Check the second export sheet
@@ -1932,6 +1938,9 @@ function processImportedData(e)
                 .setHorizontalAlignment('left').setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10).setFontStyle('normal').setFontWeight('bold')
                 .setVerticalAlignment('middle').setBackground(null).setValues(values);
               var vendorName = getVendorName(values)
+
+              spreadsheet.toast('Importing ' + vendorName + '...')
+
               exportInfo(vendorName, values, exportSheet, false, spreadsheet, sheets[sheet]);
             }
             else
@@ -1940,7 +1949,7 @@ function processImportedData(e)
         }
 
         if (sheets[sheet].getSheetName().substring(0, 7) !== "Copy Of") // Don't delete the sheets that are duplicates
-          spreadsheet.deleteSheet(sheets[sheet]) // Delete the new sheet( that was created
+          spreadsheet.deleteSheet(sheets[sheet]) // Delete the new sheet that was created
 
         if (vendorName === 'Xtratuf')
         {
@@ -1953,6 +1962,8 @@ function processImportedData(e)
         break;
       }
     }
+
+    spreadsheet.toast('Data Processing Complete')
   }
   catch (err)
   {
