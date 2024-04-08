@@ -958,7 +958,8 @@ function getSkuNotFoundMessage(row, sheet, sheetName)
     const hukPrice = header.indexOf('Wholesale Price')
     const hukStyleNum = header.indexOf('Style Number')
     const hukColorCode = header.indexOf('Color Code')
-    const proposedNewSKU = item[hukStyleNum].toString() + item[hukColorCode].toString() + ((item[hukSize].toString() === 'XXXL') ? '3XL' : (item[hukSize].toString() === 'XXL') ? '2XL' : item[hukSize].toString());
+    const proposedNewSKU = item[hukStyleNum].toString() + item[hukColorCode].toString() + 
+      ((item[hukSize].toString() === 'XXXL') ? '3XL' : (item[hukSize].toString() === 'XXL') ? '2XL' : (item[hukSize].toString() === '1') ? '' : item[hukSize].toString());
 
     return item[hukDescription] + ' - ' + item[hukColour] 
               + ' - ' + item[hukSize] + ' - Cost: $' + Number(item[hukPrice]).toFixed(2) + ' - ' + proposedNewSKU;
@@ -1614,7 +1615,8 @@ function huk(poData, HUK, exportSheet, isRefresh, spreadsheet)
 
     if (j === hukData.length) // The item(s) that were ordered were not found on the HUK data sheet
     {
-      proposedNewSKU = poData[i][style].toString() + poData[i][colorCode].toString() + ((poData[i][size].toString() === 'XXXL') ? '3XL' : (poData[i][size].toString() === 'XXL') ? '2XL' : poData[i][size].toString());
+      proposedNewSKU = poData[i][style].toString() + poData[i][colorCode].toString() + 
+        ((poData[i][size].toString() === 'XXXL') ? '3XL' : (poData[i][size].toString() === 'XXL') ? '2XL' : (poData[i][size].toString() === '1') ? '' : poData[i][size].toString());
 
       addToHukData.push([toProper(poData[i][styleName]), toProper(poData[i][color]), poData[i][style], '\'' + poData[i][colorCode].toString(), poData[i][size], poData[i][sizeAlt], poData[i][sku], 
         Number(poData[i][cost]).toFixed(2), Number(poData[i][price]).toFixed(2), 'NEW_ITEM_ADDED', 
@@ -2928,7 +2930,7 @@ function updateVendors(spreadsheet, sheets)
           if (data[s][i][sku] === '') data[s][i][sku] = "SKU_NOT_FOUND";
 
           proposedNewSKU = data[s][i][hukStyleNumber].toString() + data[s][i][hukColourCode].toString() + 
-                          ((data[s][i][hukSize].toString() === 'XXXL') ? '3XL' : (data[s][i][hukSize].toString() === 'XXL') ? '2XL' : data[s][i][hukSize].toString());
+                          ((data[s][i][hukSize].toString() === 'XXXL') ? '3XL' : (data[s][i][hukSize].toString() === 'XXL') ? '2XL' : (data[s][i][hukSize].toString() === '1') ? '' : data[s][i][hukSize].toString());
           
           data[s][i][description] = data[s][i][hukStyle] + ' - ' + data[s][i][hukColour] + ' - ' + data[s][i][hukSize] + ' - '
                                   + 'Cost: $' + Number(data[s][i][hukPrice]).toFixed(2) + ' - ' + proposedNewSKU;
@@ -2949,7 +2951,7 @@ function updateVendors(spreadsheet, sheets)
           {
             data[s][i][sku] = data[s][i][sku].toString().split(' - ', 1)[0] + " - create new?";
             proposedNewSKU = data[s][i][hukStyleNumber].toString() + data[s][i][hukColourCode].toString() + 
-                              ((data[s][i][hukSize].toString() === 'XXXL') ? '3XL' : (data[s][i][hukSize].toString() === 'XXL') ? '2XL' : data[s][i][hukSize].toString());
+                              ((data[s][i][hukSize].toString() === 'XXXL') ? '3XL' : (data[s][i][hukSize].toString() === 'XXL') ? '2XL' : (data[s][i][hukSize].toString() === '1') ? '' : data[s][i][hukSize].toString());
 
             data[s][i][description] = "SKU not in Adagio. " + data[s][i][hukStyle] + ' - ' + data[s][i][hukColour] + ' - ' + data[s][i][hukSize] + ' - '
                                     + 'Cost: $' + Number(data[s][i][hukPrice]).toFixed(2) + ' - ' + proposedNewSKU;
