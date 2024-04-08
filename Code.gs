@@ -28,13 +28,15 @@ function onEdit_Installed(e)
   var sheet = SpreadsheetApp.getActiveSheet();
   var sheetName = sheet.getSheetName()
 
-  if (sheetName === 'Search 1' || sheetName === 'Search 2')
+  if (sheetName === 'Search 1' || sheetName === 'Search 2' || sheetName === 'Search 3')
     search(e, sheet)
   else if (sheetName === 'Export 1') 
     manageExportSheetEdit(e, 1)
   else if (sheetName === 'Export 2')
     manageExportSheetEdit(e, 2)
-  else if (sheetName === 'Grundens' || sheetName === 'Helly Hansen' || sheetName === 'Xtratuf' || sheetName === 'Yeti') // Update
+  else if (sheetName === 'Export 3 (Receipts)')
+    manageExportSheetEdit(e, 3)
+  else if (sheetName === 'Grundens' || sheetName === 'Helly Hansen' || sheetName === 'HUK' || sheetName === 'Xtratuf' || sheetName === 'Yeti') // Update
     updatePntDescription(e, sheet, sheetName);
 }
 
@@ -66,7 +68,7 @@ function onOpen()
                       {name: "Refresh (Update Missing SKUs)", functionName: "refresh"},   null, 
                       {name: "Undone",                        functionName: "undone"},    null,
                       {name: "Update Inventory",              functionName: "importInventory"},
-                      {name: "Update Yeti UPCs",              functionName: "importYetiUPCs"}];
+                      {name: "Update Xtratuf and Yeti UPCs",  functionName: "importXtratufAndYetiUPCs"}];
   SpreadsheetApp.getActive().addMenu("Pacific Net & Twine Custom Menu Options", menuEntries);
 }
 
@@ -95,7 +97,7 @@ function addToExport(sheetName)
     if (itemToOrder)
     {
       item.push(item[QTY], item[DESCRIPTION]) // Add two columns for the quantity and the description
-      item[1] = item[DESCRIPTION].split(' - ', 1)[0] // SKU number
+      item[1] = item[DESCRIPTION].split(' - ').pop() // SKU number
       item[0] = 'R'; // Adagio 'Receiving' line marker
     }
     return itemToOrder
@@ -134,7 +136,7 @@ function addToExport(sheetName)
       // Concatenate all of the item values as a 2-D array, strip the skus off and add the row markers
       var itemVals = [].concat.apply([], itemValues).map(item => {
         item.push(null, item[DESCRIPTION]) // Add two columns for the quantity and the description
-        item[1] = item[DESCRIPTION].split(' - ', 1)[0] // SKU number
+        item[1] = item[DESCRIPTION].split(' - ').pop() // SKU number
         item[0] = 'R'; // Adagio 'Receiving' line marker
         return item;
       }); 
@@ -168,6 +170,16 @@ function addToExport1()
 function addToExport2()
 {
   addToExport('Export 2');
+}
+
+/**
+ * This function moves items to the Export 3 sheet.
+ * 
+ * @author Jarren Ralf
+ */
+function addToExport3()
+{
+  addToExport('Export 3 (Receipts)');
 }
 
 /**
@@ -225,10 +237,10 @@ function addVendor()
 function createTriggers()
 {
   ScriptApp.newTrigger('importInventory').timeBased().atHour(9).everyDays(1).create();
-  ScriptApp.newTrigger('importYetiUPCs').timeBased().atHour(9).everyDays(1).create(); 
+  ScriptApp.newTrigger('importXtratufAndYetiUPCs').timeBased().atHour(9).everyDays(1).create(); 
   ScriptApp.newTrigger('updateVendors').timeBased().atHour(10).everyDays(1).create();
-  ScriptApp.newTrigger('onChange').forSpreadsheet('1WB8DU1rAoRLr3a9t7K5Aa3wCOl08-pqgeV_7Yk4ink8').onChange().create()
-  ScriptApp.newTrigger('onEdit_Installed').forSpreadsheet('1WB8DU1rAoRLr3a9t7K5Aa3wCOl08-pqgeV_7Yk4ink8').onEdit().create()
+  ScriptApp.newTrigger('onChange').forSpreadsheet('1Fx_0LCt8_j1VeM6w0vCup_1GXjrHT5gBfUaojzvP46Y').onChange().create()
+  ScriptApp.newTrigger('onEdit_Installed').forSpreadsheet('1Fx_0LCt8_j1VeM6w0vCup_1GXjrHT5gBfUaojzvP46Y').onEdit().create()
 }
 
 /**
@@ -541,6 +553,8 @@ function exportInfo(vendorName, poData, exportSheet, isRefresh, spreadsheet, she
     var output = grundens(poData, vendorName, exportSheet, isRefresh, spreadsheet)
   else if (vendorName === 'Helly Hansen')
     var output = hellyHansen(poData, vendorName, exportSheet, isRefresh, spreadsheet, sheet) // sheet is required becasue sheetName is the PO number
+  else if (vendorName === 'HUK')
+    var output = huk(poData, vendorName, exportSheet, isRefresh, spreadsheet)
   else if (vendorName === 'Xtratuf')
     var output = xtratuf(poData, vendorName, exportSheet, isRefresh, spreadsheet)
   else if (vendorName === 'Yeti')
@@ -584,8 +598,9 @@ function exportInfo(vendorName, poData, exportSheet, isRefresh, spreadsheet, she
 function getAdagioDescription(row, col, sku, sheet, sheetName)
 {
   const csvData = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString()); // PNT inventory data
+  const itemNum = csvData[0].indexOf('Item #')
+  const fullDescription = csvData[0].indexOf('Item List')
   var skuNotInAdagio = getSkuNotFoundMessage(row, sheet, sheetName); // If the typed sku is not found, then display a message in the description column
-  Logger.log(sku)
   sku = sku.toString().split(' - ', 1)[0];
 
   if (sku !== 'NEW_ITEM_ADDED' && sku !== 'SKU_NOT_FOUND')
@@ -600,9 +615,9 @@ function getAdagioDescription(row, col, sku, sheet, sheetName)
 
   for (var j = 1; j < csvData.length; j++)
   {
-    if (sku == csvData[j][6]) // Match the SKUs
+    if (sku == csvData[j][itemNum]) // Match the SKUs
     {
-      data[0] = [sku, csvData[j][1]] // // Add the adagio description
+      data[0] = [sku, csvData[j][fullDescription]] // // Add the adagio description
       break;
     }
   }
@@ -625,6 +640,8 @@ function getAdagioDescription(row, col, sku, sheet, sheetName)
 function getAdagioDescriptions(row, range, sheet, sheetName)
 {
   const csvData = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString());
+  const itemNum = csvData[0].indexOf('Item #')
+  const fullDescription = csvData[0].indexOf('Item List')
   var sku, description;
 
   var items = range.getValues().map((item, i) => {
@@ -639,9 +656,9 @@ function getAdagioDescriptions(row, range, sheet, sheetName)
 
     for (var j = 1; j < csvData.length; j++)
     {
-      if (sku == csvData[j][6]) // Match the SKUs
+      if (sku == csvData[j][itemNum]) // Match the SKUs
       {
-        item = [sku, csvData[j][1]] // // Add the adagio description
+        item = [sku, csvData[j][fullDescription]] // // Add the adagio description
         break;
       }
     }
@@ -933,6 +950,19 @@ function getSkuNotFoundMessage(row, sheet, sheetName)
     return item[hellyDescription] + ' - ' + item[hellyColour] 
               + ' - ' + item[hellySize] + ' - Cost: $' + Number(item[hellyPrice]).toFixed(2) + ' - ' + proposedNewSKU;
   }
+  else if (sheetName === 'HUK')
+  {
+    const hukDescription = header.indexOf('Style Name')
+    const hukColour = header.indexOf('Color Name')
+    const hukSize = header.indexOf('Size')
+    const hukPrice = header.indexOf('Wholesale Price')
+    const hukStyleNum = header.indexOf('Style Number')
+    const hukColorCode = header.indexOf('Color Code')
+    const proposedNewSKU = item[hukStyleNum].toString() + item[hukColorCode].toString() + ((item[hukSize].toString() === 'XXXL') ? '3XL' : (item[hukSize].toString() === 'XXL') ? '2XL' : item[hukSize].toString());
+
+    return item[hukDescription] + ' - ' + item[hukColour] 
+              + ' - ' + item[hukSize] + ' - Cost: $' + Number(item[hukPrice]).toFixed(2) + ' - ' + proposedNewSKU;
+  }
   else if (sheetName === 'Xtratuf')
   {
     const xtratufDescription = header.indexOf('Name/Nom/Description')
@@ -974,6 +1004,8 @@ function getVendorName(values)
     return 'Grundens';
   else if (values[0].includes("Seasons") && values[0].includes("Segmentation") && values[0].includes("Technology"))
     return 'Helly Hansen';
+  else if (values[0].includes("Elastic Order #") && values[0].includes("UPC") && values[0].includes("Shipment Name"))
+    return 'HUK';
   else if (values[18][1] === 'XTRATUF')
     return 'Xtratuf';
   else if (values[3][4] === 'http://www.yeti.ca')
@@ -1523,6 +1555,87 @@ function hellyHansen(poData, HellyHansen, exportSheet, isRefresh, spreadsheet, s
 }
 
 /**
+ * This function creates the export data for a HUK purchase order. Is able to import multiple purchase orders.
+ * 
+ * @param {Object[][]}       poData : The purchase order data that was just uploaded.
+ * @param {String}              HUK : The name of the vendor, in this case HUK.
+ * @param {Sheet}       exportSheet : The sheet that the data will be exported to.
+ * @param {Boolean}       isRefresh : A boolean representing whether the user has clicked refresh or not.
+ * @param {Spreadsheet} spreadsheet : The active spreadsheet.
+ * @return {Object[][]}      output : The data created for the export sheet.
+ * @author Jarren Ralf
+ */
+function huk(poData, HUK, exportSheet, isRefresh, spreadsheet)
+{
+  const hukSheet = spreadsheet.getSheetByName('HUK');
+  const hukData = hukSheet.getDataRange().getValues();
+  var addToHukData = [], proposedNewSKU;
+
+  // HUK Data
+  const hukSku         = hukData[0].indexOf("SKU");
+  const pntSKU         = hukData[0].indexOf("PNT SKU");
+  const pntDescription = hukData[0].indexOf("PNT Description");
+
+  // Purchase Order Data
+  const qty        = poData[0].indexOf("Quantity Requested"); 
+  const size       = poData[0].indexOf("Size");
+  const sizeAlt    = poData[0].indexOf("Alt Size");
+  const poNum      = poData[0].indexOf("PO #");
+  const style      = poData[0].indexOf("Style Number");
+  const sku        = poData[0].indexOf("SKU");
+  const cost       = poData[0].indexOf("Wholesale Price");
+  const price      = poData[0].indexOf("Retail Price");
+  const color      = poData[0].indexOf("Color Name");
+  const colorCode  = poData[0].indexOf("Color Code");
+  const styleName  = poData[0].indexOf("Style Name");
+  const po = reformatPoNumber(poData[1][poNum].toString());
+  const vendorNumber = getVendorNumber(HUK, spreadsheet);
+  var currentEditor = exportSheet.getSheetValues(2, 5, 1, 1)[0][0];
+  
+  if (currentEditor === '')
+    currentEditor = 'Someone is currently editing this PO';
+
+  const output = (isRefresh) ? [] : [['H', po, vendorNumber, 'Type your order description in this cell. (40 characters max)', HUK],
+                                     ['C', 'Type your order comments in this cell. (75 characters max)', null, null, currentEditor]]
+
+  for (var i = 1; i < poData.length; i++)
+  {
+    for (var j = 1; j < hukData.length; j++)
+    {
+      if (poData[i][sku] == hukData[j][hukSku])
+      {
+        if (isNewPurchaseOrder(poData, i, poNum)) // If a new Purchase Order is detected, then we need to add a new header
+          output.push(['H', po, vendorNumber, 'Type your order description in this cell. (40 characters max)', HUK])
+
+        output.push(['R', hukData[j][pntSKU], poData[i][qty], hukData[j][pntDescription], Number(poData[i][cost]).toFixed(2)]) // Receiving Line
+        break;
+      }
+    }
+
+    if (j === hukData.length) // The item(s) that were ordered were not found on the HUK data sheet
+    {
+      proposedNewSKU = poData[i][style].toString() + poData[i][colorCode].toString() + ((poData[i][size].toString() === 'XXXL') ? '3XL' : (poData[i][size].toString() === 'XXL') ? '2XL' : poData[i][size].toString());
+
+      addToHukData.push([toProper(poData[i][styleName]), toProper(poData[i][color]), poData[i][style], '\'' + poData[i][colorCode].toString(), poData[i][size], poData[i][sizeAlt], poData[i][sku], 
+        Number(poData[i][cost]).toFixed(2), Number(poData[i][price]).toFixed(2), 'NEW_ITEM_ADDED', 
+        toProper(poData[i][styleName]) + ' - ' + toProper(poData[i][color]) + ' - '  + poData[i][size] + ' - Cost: $' + Number(poData[i][cost]).toFixed(2) + ' - ' + proposedNewSKU])
+      output.push(['R', 'NEW_ITEM_ADDED', poData[i][qty], toProper(poData[i][styleName]) + ' - ' + toProper(poData[i][color]) + ' - '  + poData[i][size] + 
+        ' - Cost: $' + Number(poData[i][cost]).toFixed(2) + ' - ' + proposedNewSKU, Number(poData[i][cost]).toFixed(2)])
+    }
+  }
+
+  if (addToHukData.length !== 0) // Add items to the HUK data that were on the PO but not in the HUK data
+  {
+    hukSheet.showSheet().getRange(hukSheet.getLastRow() + 1, 1, addToHukData.length, addToHukData[0].length).activate().setHorizontalAlignment('left')
+      .setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10).setFontStyle('normal').setFontWeight('bold').setVerticalAlignment('middle').setBackground(null)
+      .setValues(addToHukData)
+    spreadsheet.toast('Add PNT SKUs to the HUK data.', '⚠️ New HUK Items ⚠️', 30)
+  }
+
+  return output;
+}
+
+/**
  * This function updates the inventory from a csv file. It also hides all of the non-primary sheets (since this function is run daily on a trigger).
  * 
  * @author Jarren Ralf
@@ -1533,19 +1646,19 @@ function importInventory()
   const sheets = spreadsheet.getSheets();
   const csvData = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString()); // PNT inventory data
   var header = csvData.shift(); // Remove the header (we don't want the header to be sorted into the middle of the array)
-  const activeItems = csvData.filter(item => item[10] === 'A').sort(sortByCategories) // Remove the inactive items and sort by the categories
+  const createdDate = header.indexOf('Created Date')
   var sheetName; // Will be used when hiding sheets
 
-  const recentlyCreatedItems = activeItems.map(val => {
-    d = val[7].split('.');                           // Split the date at the "."
-    val[7] = new Date(d[2],d[1] - 1,d[0]).getTime(); // Convert the date string to a Number for convenient sorting purposes
+  const recentlyCreatedItems = csvData.map(val => {
+    d = val[createdDate].split('.');                           // Split the date at the "."
+    val[createdDate] = new Date(d[2],d[1] - 1,d[0]).getTime(); // Convert the date string to a Number for convenient sorting purposes
     return val;
   }).sort(sortByCreatedDate).map(c => [c[0], c[1], null, c[2], c[3], c[4]]); // Sort by the creative date, then only keep the desired columns
 
-  const numRows = activeItems.unshift(header); // Add the header back to the top of the array
+  const numRows = csvData.unshift(header); // Add the header back to the top of the array
   header = [header[0], header[1], null, header[2], header[3], header[4]]
   recentlyCreatedItems.unshift(header) // Add a header to the recently created items
-  const data = activeItems.map(c => [c[0], c[1], null, c[2], c[3], c[4]]); // Remove the On Transfer Sheet, Comments 3 (Categories), and Active Item columns
+  const data = csvData.map(c => [c[0], c[1], null, c[2], c[3], c[4]]); // Remove the On Transfer Sheet, Comments 3 (Categories), and Active Item columns
   spreadsheet.getSheetByName('Inventory').clearContents().getRange(1, 1, numRows, data[0].length).setNumberFormat('@').setValues(data);
   spreadsheet.getSheetByName('Recent').clearContents().getRange(1, 1, numRows, data[0].length).setNumberFormat('@').setValues(recentlyCreatedItems);
 
@@ -1559,22 +1672,27 @@ function importInventory()
 }
 
 /**
- * This function reduces the set of all barcodes down to just the Yeti UPC codes, then adds the inventory values to that data and stores the information on a hidden sheet.
+ * This function reduces the set of all barcodes down to just the Xtratuf and Yeti UPC codes, then adds the inventory values to that data and stores the information on a hidden sheet.
  * 
  * @author Jarren Ralf
  */
-function importYetiUPCs()
+function importXtratufAndYetiUPCs()
 {
   var item;
   const inventory = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString());
+  const itemNum = inventory[0].indexOf('Item #');
   const data = Utilities.parseCsv(DriveApp.getFilesByName("BarcodeInput.csv").next().getBlob().getDataAsString())
-    .filter(descrip => descrip[2].toUpperCase().includes('YETI')) // Grab only the items that contain YETI in the description
+    .filter(descrip => descrip[2].toUpperCase().includes('YETI') || descrip[2].toUpperCase().includes('XTRATUF')) // Grab only the items that contain YETI in the description
     .map(value => {
-      item = inventory.find(sku => sku[6].toUpperCase() === value[1].toUpperCase()) // Match the SKUs in our inventory
+      item = inventory.find(sku => sku[itemNum].toUpperCase() === value[1].toUpperCase()) // Match the SKUs in our inventory
+
+      if (item == null)
+        return [false]
+        
       return [value[0], value[3], item[1], '', item[2], item[3], item[4]] // Return the item and the associated inventory values
-    })
+    }).filter(row => row.length > 1)
   
-  SpreadsheetApp.getActive().getSheetByName('Yeti UPCs').getRange(2, 1, data.length, 7).setNumberFormat('@').setValues(data)
+  SpreadsheetApp.getActive().getSheetByName('Xtratuf and Yeti UPCs').getRange(2, 1, data.length, 7).setNumberFormat('@').setValues(data)
 }
 
 /**
@@ -1715,53 +1833,7 @@ function manageExportSheetEdit(e, sheetNumber)
 
   try
   {
-    if (sheet.getLastColumn() > NUM_COLS) // User may be attempting to Append to the Export sheet (File -> Import -> Append to current sheet)
-    {
-      if (NUM_IMPORTS === 1) // Only allow 1 export per onChange edit
-      {
-        NUM_IMPORTS++; // Increment counter so no more exports are attempted
-        var currentUsers = []
-        currentUsers.push(sheet.getRange('E2').activate().getValue().split(' ', 1)[0]); // Move to the top of the export page
-
-        if (currentUsers[0] === '') // There is no one currently editing this sheet 
-        {
-          const values = sheet.getRange(row, 1, sheet.getLastRow() - row + 1, sheet.getLastColumn()).getValues();
-          spreadsheet.getSheetByName('Last Import ' + sheetNumber).clearContents().getRange(1, 1, values.length, values[0].length).setNumberFormat('@')
-            .setHorizontalAlignment('left').setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10).setFontStyle('normal').setFontWeight('bold')
-            .setVerticalAlignment('middle').setBackground(null).setValues(values); // Put the imported values on the Last Import sheet
-          sheet.getRange(row, 1, rowEnd - row + 1, NUM_COLS).clearContent()
-          const vendorName = getVendorName(values)
-          Logger.log(vendorName)
-          exportInfo(vendorName, values, sheet, false, spreadsheet);
-        }
-        else // Check the second export sheet because the first one has a current user
-        {
-          sheetNumber = (sheetNumber === 1) ? sheetNumber++ : sheetNumber--; // Flip the sheet number between 1 and 2 depending on which sheet was originally edited
-          var exportSheet = spreadsheet.getSheetByName('Export ' + sheetNumber);
-          currentUsers.push(exportSheet.getRange('E2').activate().getValue().split(' ', 1)[0]); // Move to the top of the export page
-
-          if (currentUsers[1] === '') // There is no one currently editing this sheet 
-          {
-            const values = sheet.getRange(row, 1, sheet.getLastRow() - row + 1, sheet.getLastColumn()).getValues();
-            spreadsheet.getSheetByName('Last Import ' + sheetNumber).clearContents().getRange(1, 1, values.length, values[0].length).setNumberFormat('@')
-              .setHorizontalAlignment('left').setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10).setFontStyle('normal').setFontWeight('bold')
-              .setVerticalAlignment('middle').setBackground(null).setValues(values); // Put the imported values on the Last Import sheet
-            sheet.getRange(row, 1, rowEnd - row + 1, NUM_COLS).clearContent()
-            const vendorName = getVendorName(values)
-            Logger.log(vendorName)
-            exportInfo(vendorName, values, exportSheet, false, spreadsheet);
-          }
-          else // Both the export sheets are in use, therefore, an import like this can not occur. The user must physically go ask someone to stop using, or hit the "done" button.
-          {
-            sheet.getRange(row, 1, rowEnd - row + 1, NUM_COLS).clearContent()
-            Browser.msgBox('You are unable to import because ' + currentUsers[0] + ' and ' + currentUsers[1] + ' are currently using Export 1 and 2, respectively.')
-          }
-        }
-      }
-
-      sheet.deleteColumns(6, sheet.getLastColumn() - range.columnEnd); // Delete all of the extra columns that were a result of appending the data to this sheet
-    }
-    else if (isSingleRow && isSingleColumn &&  isNotBlank(range.getValue())) // User is editing a single cell AND has not pressed delete
+    if (isSingleRow && isSingleColumn &&  isNotBlank(range.getValue())) // User is editing a single cell AND has not pressed delete
     {    
       // && !userHasPressedDelete(e.value)
       if (row === 1 && col === 5) // User is changing the vendor
@@ -2245,8 +2317,8 @@ function search(e, sheet)
         {
           if (isUPC_A(values[0][0])) // The first value is a UPC-A, so assume all the pasted values are
           {
-            const yetiUpcSheet = spreadsheet.getSheetByName('Yeti UPCs')
-            const data = spreadsheet.getSheetByName('Yeti UPCs').getSheetValues(2, 1, yetiUpcSheet.getLastRow() - 1, 7)
+            const yetiUpcSheet = spreadsheet.getSheetByName('Xtratuf and Yeti UPCs')
+            const data = spreadsheet.getSheetByName('Xtratuf and Yeti UPCs').getSheetValues(2, 1, yetiUpcSheet.getLastRow() - 1, 7)
             var someUpcsNotFound = false, upc;
             
             const upcs = values.map(item => {
@@ -2300,6 +2372,7 @@ function search(e, sheet)
           else // Probably SKU numbers
           {
             const data = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString());
+            const itemNum = data[0].indexOf('Item #')
             var someSKUsNotFound = false, skus;
             
             if (values[0][0].toString().includes('-'))
@@ -2307,7 +2380,7 @@ function search(e, sheet)
               skus = values.map(sku => sku[0].substring(0,4) + sku[0].substring(5,9) + sku[0].substring(10)).map(item => {
               
                 for (var i = 0; i < data.length; i++)
-                  if (data[i][6] == item.toString().toUpperCase())
+                  if (data[i][itemNum] == item.toString().toUpperCase())
                     return [data[i][0], data[i][1], '',  data[i][2], data[i][3], data[i][4]]
 
                 someSKUsNotFound = true;
@@ -2320,7 +2393,7 @@ function search(e, sheet)
               skus = values.map(item => {
               
                 for (var i = 0; i < data.length; i++)
-                  if (data[i][6] == item[0].toString().toUpperCase())
+                  if (data[i][itemNum] == item[0].toString().toUpperCase())
                     return [data[i][0], data[i][1], '',  data[i][2], data[i][3], data[i][4]]
 
                 someSKUsNotFound = true;
@@ -2368,7 +2441,7 @@ function search(e, sheet)
           }
         }
       }
-      else
+      else // Multiple Rows and Columns
       {
         const quantityIndex = colEnd - col; // Assume that the quantity is the final column
         const values = range.getValues().filter(blank => isNotBlank(blank[0]))
@@ -2378,8 +2451,8 @@ function search(e, sheet)
          */
         if (values.length !== 0 && isUPC_A(values[0][0])) 
         {
-          const yetiUpcSheet = spreadsheet.getSheetByName('Yeti UPCs')
-          const data = spreadsheet.getSheetByName('Yeti UPCs').getSheetValues(2, 1, yetiUpcSheet.getLastRow() - 1, 7)
+          const yetiUpcSheet = spreadsheet.getSheetByName('Xtratuf and Yeti UPCs')
+          const data = spreadsheet.getSheetByName('Xtratuf and Yeti UPCs').getSheetValues(2, 1, yetiUpcSheet.getLastRow() - 1, 7)
           var someUpcsNotFound = false, upc;
           
           const upcs = values.map(item => {
@@ -2416,10 +2489,14 @@ function search(e, sheet)
             const YELLOW = new Array(6).fill('#ffe599')
             const colours = [].concat.apply([], [new Array(numUpcsNotFound).fill(YELLOW), new Array(numUpcsFound).fill(WHITE)]); // Concatenate all of the item values as a 2-D array
 
-            sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6).clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
-              .offset(0, 0, numItems, 6)
-                .setFontFamily('Arial').setFontWeight('bold').setFontSize(10).setHorizontalAlignments(horizontalAlignments).setBackgrounds(colours).setValues(items)
-              .offset(numUpcsNotFound, 0, numUpcsFound, 6).activate()
+            if (numUpcsFound !==0)
+              sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6).clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
+                .offset(0, 0, numItems, 6)
+                  .setFontFamily('Arial').setFontWeight('bold').setFontSize(10).setHorizontalAlignments(horizontalAlignments).setBackgrounds(colours).setValues(items)
+                .offset(numUpcsNotFound, 0, numUpcsFound, 6).activate()
+            else
+              sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6).clearContent().setBackground('white').setFontColor('black').setBorder(true, true, true, true, false, false)
+                .offset(0, 0, numItems, 6).setFontFamily('Arial').setFontWeight('bold').setFontSize(10).setHorizontalAlignments(horizontalAlignments).setBackgrounds(colours).setValues(items)
           }
           else // All UPCs were succefully found
           {
@@ -2717,6 +2794,8 @@ function updateVendors(spreadsheet, sheets)
   }
 
   const csvData = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString());
+  const itemNum = csvData[0].indexOf('Item #')
+  const fullDescription = csvData[0].indexOf('Item List')
   const sheetNames = sheets.map(sheet => sheet.getSheetName());
   var range = new Array(sheets.length), data = new Array(sheets.length);
 
@@ -2755,9 +2834,9 @@ function updateVendors(spreadsheet, sheets)
         {
           for (var j = 0; j < csvData.length; j++)
           {
-            if (data[s][i][sku].toString().split(' - ', 1)[0] == csvData[j][6]) // Match the SKUs
+            if (data[s][i][sku].toString().split(' - ', 1)[0] == csvData[j][itemNum]) // Match the SKUs
             {
-              data[s][i][description] = csvData[j][1] // Add the adagio description
+              data[s][i][description] = csvData[j][fullDescription] // Add the adagio description
               data[s][i][sku] = data[s][i][sku].toString().split(' - ', 1)[0] // Remove " - create new?" from the SKU
               break;
             }
@@ -2806,9 +2885,9 @@ function updateVendors(spreadsheet, sheets)
         {
           for (var j = 0; j < csvData.length; j++)
           {
-            if (data[s][i][sku].toString().split(' - ', 1)[0] == csvData[j][6]) // Match the SKUs
+            if (data[s][i][sku].toString().split(' - ', 1)[0] == csvData[j][itemNum]) // Match the SKUs
             {
-              data[s][i][description] = csvData[j][1] // Add the adagio description
+              data[s][i][description] = csvData[j][fullDescription] // Add the adagio description
               data[s][i][sku] = data[s][i][sku].toString().split(' - ', 1)[0] // Remove " - create new?" from the SKU
               break;
             }
@@ -2820,6 +2899,60 @@ function updateVendors(spreadsheet, sheets)
             proposedNewSKU = data[s][i][hellySKU].replace(/_|-/g,'')
             data[s][i][description] = "SKU not in Adagio. " + data[s][i][hellyDescription] + ' - ' + data[s][i][hellyColour] 
               + ' - ' + data[s][i][hellySize] + ' - Cost: $' + Number(data[s][i][hellyPrice]).toFixed(2) + ' - ' + proposedNewSKU
+          }
+        }
+      }
+
+      range[s].setNumberFormat('@').setHorizontalAlignment('left').setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10)
+        .setFontStyle('normal').setFontWeight('bold').setVerticalAlignment('middle').setBackground(null).setValues(data[s])
+    }
+    else if (sheetNames[s] === 'HUK')
+    {
+      range[s] = sheets[s].getDataRange();
+       data[s] = range[s].getValues();
+      const sku            = data[s][0].indexOf("PNT SKU")
+      const description    = data[s][0].indexOf("PNT Description")
+      const hukStyle       = data[s][0].indexOf("Style Name")
+      const hukStyleNumber = data[s][0].indexOf("Style Number")
+      const hukColour      = data[s][0].indexOf("Color Name")
+      const hukColourCode  = data[s][0].indexOf("Color Code")
+      const hukSize        = data[s][0].indexOf("Size")
+      const hukPrice       = data[s][0].indexOf("Wholesale Price")
+
+      var proposedNewSKU;
+
+      for (var i = 1; i < data[s].length; i++)
+      {
+        if (data[s][i][sku] === '' || data[s][i][sku].toString().split(' - ', 1)[0] === 'SKU_NOT_FOUND' || data[s][i][sku].toString().split(' - ', 1)[0] === 'NEW_ITEM_ADDED')
+        {
+          if (data[s][i][sku] === '') data[s][i][sku] = "SKU_NOT_FOUND";
+
+          proposedNewSKU = data[s][i][hukStyleNumber].toString() + data[s][i][hukColourCode].toString() + 
+                          ((data[s][i][hukSize].toString() === 'XXXL') ? '3XL' : (data[s][i][hukSize].toString() === 'XXL') ? '2XL' : data[s][i][hukSize].toString());
+          
+          data[s][i][description] = data[s][i][hukStyle] + ' - ' + data[s][i][hukColour] + ' - ' + data[s][i][hukSize] + ' - '
+                                  + 'Cost: $' + Number(data[s][i][hukPrice]).toFixed(2) + ' - ' + proposedNewSKU;
+        }
+        else
+        {
+          for (var j = 0; j < csvData.length; j++)
+          {
+            if (data[s][i][sku].toString().split(' - ', 1)[0] == csvData[j][itemNum]) // Match the SKUs
+            {
+              data[s][i][description] = csvData[j][fullDescription] // Add the adagio description
+              data[s][i][sku] = data[s][i][sku].toString().split(' - ', 1)[0] // Remove " - create new?" from the SKU
+              break;
+            }
+          }
+
+          if (j === csvData.length) // SKU was not found in the Adagio data
+          {
+            data[s][i][sku] = data[s][i][sku].toString().split(' - ', 1)[0] + " - create new?";
+            proposedNewSKU = data[s][i][hukStyleNumber].toString() + data[s][i][hukColourCode].toString() + 
+                              ((data[s][i][hukSize].toString() === 'XXXL') ? '3XL' : (data[s][i][hukSize].toString() === 'XXL') ? '2XL' : data[s][i][hukSize].toString());
+
+            data[s][i][description] = "SKU not in Adagio. " + data[s][i][hukStyle] + ' - ' + data[s][i][hukColour] + ' - ' + data[s][i][hukSize] + ' - '
+                                    + 'Cost: $' + Number(data[s][i][hukPrice]).toFixed(2) + ' - ' + proposedNewSKU;
           }
         }
       }
@@ -2855,9 +2988,9 @@ function updateVendors(spreadsheet, sheets)
         {
           for (var j = 0; j < csvData.length; j++)
           {
-            if (data[s][i][sku].toString().split(' - ', 1)[0] == csvData[j][6]) // Match the SKUs
+            if (data[s][i][sku].toString().split(' - ', 1)[0] == csvData[j][itemNum]) // Match the SKUs
             {
-              data[s][i][description] = csvData[j][1] // Add the adagio description
+              data[s][i][description] = csvData[j][fullDescription] // Add the adagio description
               data[s][i][sku] = data[s][i][sku].toString().split(' - ', 1)[0] // Remove " - create new?" from the SKU
               break;
             }
@@ -2900,9 +3033,9 @@ function updateVendors(spreadsheet, sheets)
         {
           for (var j = 0; j < csvData.length; j++)
           {
-            if (data[s][i][sku].toString().split(' - ', 1)[0] == csvData[j][6]) // Match the SKUs
+            if (data[s][i][sku].toString().split(' - ', 1)[0] == csvData[j][itemNum]) // Match the SKUs
             {
-              data[s][i][description] = csvData[j][1] // Add the adagio description
+              data[s][i][description] = csvData[j][fullDescription] // Add the adagio description
               data[s][i][sku] = data[s][i][sku].toString().split(' - ', 1)[0] // Remove " - create new?" from the SKU
               break;
             }
