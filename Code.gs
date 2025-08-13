@@ -1001,7 +1001,7 @@ function getVendorName(values)
 {
   Logger.log(values[1][0])
   
-  if (values[1][0] === 'Grundens')
+  if (values[0].includes("Logowear") && values[0].includes("Season"))
     return 'Grundens';
   else if (values[0].includes("Seasons") && values[0].includes("Segmentation") && values[0].includes("Technology"))
     return 'Helly Hansen';
@@ -1302,15 +1302,14 @@ function grundens(poData, Grundens, exportSheet, isRefresh, spreadsheet)
   const pntDescription = grunData[0].indexOf("PNT Description");
 
   // Purchase Order Data
-  const qty        = poData[0].indexOf("Quantity"); 
+  const qty        = poData[0].indexOf("Quantity Requested"); 
   const size       = poData[0].indexOf("Size");
-  const poNum      = poData[0].indexOf("Customer PO Number");
+  const poNum      = poData[0].indexOf("PO #");
   const style      = poData[0].indexOf("Style Number");
-  const price      = poData[0].indexOf("Price Per");
-  const color      = poData[0].indexOf("Color");
+  const price      = poData[0].indexOf("Wholesale Price");
+  const color      = poData[0].indexOf("Color Name");
   const colorCode  = poData[0].indexOf("Color Code");
   const styleName  = poData[0].indexOf("Style Name");
-  const orderTags  = poData[0].indexOf("Order Tags");
   const po = reformatPoNumber(poData[1][poNum].toString());
   const vendorNumber = getVendorNumber(Grundens, spreadsheet);
   var currentEditor = exportSheet.getSheetValues(2, 5, 1, 1)[0][0];
@@ -1340,7 +1339,7 @@ function grundens(poData, Grundens, exportSheet, isRefresh, spreadsheet)
       proposedNewSKU = poData[i][style].toString() + ((poData[i][colorCode].toString().length == 1) ? '00' + poData[i][colorCode].toString() : 
                                                       (poData[i][colorCode].toString().length == 2) ?  '0' + poData[i][colorCode].toString() : 
                                                        poData[i][colorCode].toString()) + poData[i][size]
-      addToGrundensData.push([poData[i][style], poData[i][orderTags], toProper(poData[i][color]), null, null, toProper(poData[i][styleName]), poData[i][colorCode], 
+      addToGrundensData.push([poData[i][style], '', toProper(poData[i][color]), null, null, toProper(poData[i][styleName]), poData[i][colorCode], 
         null, null, null, null, null, null, null, null, null, poData[i][size], null, Number(poData[i][price]).toFixed(2), null, 'NEW_ITEM_ADDED', 
         toProper(poData[i][styleName]) + ' - ' + toProper(poData[i][color]) + ' - '  + poData[i][size] + ' - - - Cost: $' + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU])
       output.push(['R', 'NEW_ITEM_ADDED', poData[i][qty], toProper(poData[i][styleName]) + ' - ' + toProper(poData[i][color]) + ' - '  + poData[i][size] + 
