@@ -1683,7 +1683,7 @@ function importXtratufAndYetiUPCs()
   const inventory = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString());
   const itemNum = inventory[0].indexOf('Item #');
   const data = Utilities.parseCsv(DriveApp.getFilesByName("BarcodeInput.csv").next().getBlob().getDataAsString())
-    .filter(descrip => descrip[2].toUpperCase().includes('YETI') || descrip[2].toUpperCase().includes('XTRATUF')) // Grab only the items that contain YETI in the description
+    //.filter(descrip => descrip[2].toUpperCase().includes('YETI') || descrip[2].toUpperCase().includes('XTRATUF')) // Grab only the items that contain YETI in the description
     .map(value => {
       item = inventory.find(sku => sku[itemNum].toUpperCase() === value[1].toUpperCase()) // Match the SKUs in our inventory
 
@@ -1692,6 +1692,8 @@ function importXtratufAndYetiUPCs()
         
       return [value[0], value[3], item[1], '', item[2], item[3], item[4]] // Return the item and the associated inventory values
     }).filter(row => row.length > 1)
+
+  data.shift()// Remove the header
   
   SpreadsheetApp.getActive().getSheetByName('Xtratuf and Yeti UPCs').getRange(2, 1, data.length, 7).setNumberFormat('@').setValues(data)
 }
@@ -1770,6 +1772,21 @@ function isUPC_A(upcNumber)
     sum += (i % 2 === 0) ? Number(upc[i])*3 : Number(upc[i])
 
   return upc.endsWith(Math.ceil(sum/10)*10 - sum)
+}
+
+/**
+ * This function returns true if the presented number is a EAN_13, false otherwise.
+ * 
+ * @param {Number} upcNumber : The EAN_13 number
+ * @returns Whether the given value is a EAN_13 or not
+ * @author Jarren Ralf
+ */
+function isEAN_13(upcNumber)
+{
+  for (var i = 0, sum = 0, upc = upcNumber.toString(); i < upc.length - 1; i++)
+    sum += (i % 2 === 0) ? Number(upc[i]) : Number(upc[i])*3
+
+  return upc.endsWith(Math.ceil(sum/10)*10 - sum) && upc.length === 13
 }
 
 /**
@@ -2316,11 +2333,12 @@ function search(e, sheet)
 
         if (values.length !== 0) // Don't run function if every value is blank, probably means the user pressed the delete key on a large selection
         {
-          if (isUPC_A(values[0][0])) // The first value is a UPC-A, so assume all the pasted values are
+          if (/^\d+$/.test(values[0][0]) && (isUPC_A(values[0][0]) || isEAN_13(values[0][0]))) // The first value is a UPC-A, so assume all the pasted values are
           {
+            spreadsheet.toast('Searching...')
             const yetiUpcSheet = spreadsheet.getSheetByName('Xtratuf and Yeti UPCs')
             const data = spreadsheet.getSheetByName('Xtratuf and Yeti UPCs').getSheetValues(2, 1, yetiUpcSheet.getLastRow() - 1, 7)
-            var someUpcsNotFound = false, upc;
+            var someUpcsNotFound = false;
             
             const upcs = values.map(item => {
             
@@ -2328,9 +2346,11 @@ function search(e, sheet)
                 if (item[0] == data[i][0])
                   return data[i].slice(1);
 
+              
+
               someUpcsNotFound = true;
 
-              return ['UPC Not Found:', upc, '', '', '', '']
+              return ['UPC Not Found:', item[0], '', '', '', '']
             });
 
             if (someUpcsNotFound)
@@ -2369,19 +2389,23 @@ function search(e, sheet)
               sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6).clearContent().setBackground('white').setFontColor('black').offset(0, 0, numItems, 6)
                 .setFontFamily('Arial').setFontWeight('bold').setFontSize(10).setHorizontalAlignments(horizontalAlignments).setValues(upcs).activate()
             }
+
+            spreadsheet.toast('Searching Complete.')
           }
           else // Probably SKU numbers
           {
+            spreadsheet.toast('Searching...')
             const data = Utilities.parseCsv(DriveApp.getFilesByName("inventory.csv").next().getBlob().getDataAsString());
             const itemNum = data[0].indexOf('Item #')
+            const itemDescription = data[0].indexOf('Item List')
             var someSKUsNotFound = false, skus;
             
             if (values[0][0].toString().includes('-'))
             {
-              skus = values.map(sku => sku[0].substring(0,4) + sku[0].substring(5,9) + sku[0].substring(10)).map(item => {
+              skus = values.map(item => { //.map(sku => sku[0].substring(0, 4) + sku[0].substring(5, 9) + sku[0].substring(10))
               
                 for (var i = 0; i < data.length; i++)
-                  if (data[i][itemNum] == item.toString().toUpperCase())
+                  if (data[i][itemNum] == (item[0].substring(0, 4) + item[0].substring(5, 9) + item[0].substring(10)).toString().toUpperCase() || data[i][itemDescription].includes(item[0].toString()))
                     return [data[i][0], data[i][1], '',  data[i][2], data[i][3], data[i][4]]
 
                 someSKUsNotFound = true;
@@ -2394,7 +2418,7 @@ function search(e, sheet)
               skus = values.map(item => {
               
                 for (var i = 0; i < data.length; i++)
-                  if (data[i][itemNum] == item[0].toString().toUpperCase())
+                  if (data[i][itemNum] == item[0].toString().toUpperCase() || data[i][itemDescription].includes(item[0].toString()))
                     return [data[i][0], data[i][1], '',  data[i][2], data[i][3], data[i][4]]
 
                 someSKUsNotFound = true;
@@ -2439,6 +2463,8 @@ function search(e, sheet)
               sheet.getRange(5, 1, sheet.getMaxRows() - 4, 6).clearContent().setBackground('white').setFontColor('black').offset(0, 0, numItems, 6)
                 .setFontFamily('Arial').setFontWeight('bold').setFontSize(10).setHorizontalAlignments(horizontalAlignments).setValues(skus).activate()
             }
+
+            spreadsheet.toast('Searching Complete.')
           }
         }
       }
