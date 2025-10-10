@@ -549,6 +549,8 @@ function downloadCsvFile(sheetName)
  */
 function exportInfo(vendorName, poData, exportSheet, isRefresh, spreadsheet, sheet)
 {
+  Logger.log('vendorName: ' + vendorName)
+
   if (vendorName === 'Grundens')
     var output = grundens(poData, vendorName, exportSheet, isRefresh, spreadsheet)
   else if (vendorName === 'Helly Hansen')
@@ -999,12 +1001,19 @@ function getSkuNotFoundMessage(row, sheet, sheetName)
  */
 function getVendorName(values)
 {
-  Logger.log(values[1][0])
+  const upc = values[0].indexOf("UPC/EAN")
   
-  if (values[0].includes("Logowear") && values[0].includes("Season"))
-    return 'Grundens';
-  else if (values[0].includes("Seasons") && values[0].includes("Segmentation") && values[0].includes("Technology"))
-    return 'Helly Hansen';
+  if (upc !== -1)
+  {
+    switch (values[1][upc].toString().substring(0, 4))
+    {
+      case '7040':
+        return 'Helly Hansen';
+      case '7332':
+      case '0840':
+        return 'Grundens';
+    }
+  }
   else if (values[0].includes("Elastic Order #") && values[0].includes("UPC") && values[0].includes("Shipment Name"))
     return 'HUK';
   else if (values[18][1] === 'XTRATUF')
@@ -2346,8 +2355,6 @@ function search(e, sheet)
                 if (item[0] == data[i][0])
                   return data[i].slice(1);
 
-              
-
               someUpcsNotFound = true;
 
               return ['UPC Not Found:', item[0], '', '', '', '']
@@ -2476,7 +2483,7 @@ function search(e, sheet)
         /* Don't run function if every value is blank, probably means the user pressed the delete key on a large selection
          * The first value is a UPC-A, so assume all the pasted values are
          */
-        if (values.length !== 0 && isUPC_A(values[0][0])) 
+        if (values.length !== 0 && /^\d+$/.test(values[0][0]) && (isUPC_A(values[0][0]) || isEAN_13(values[0][0]))) 
         {
           const yetiUpcSheet = spreadsheet.getSheetByName('Xtratuf and Yeti UPCs')
           const data = spreadsheet.getSheetByName('Xtratuf and Yeti UPCs').getSheetValues(2, 1, yetiUpcSheet.getLastRow() - 1, 7)
