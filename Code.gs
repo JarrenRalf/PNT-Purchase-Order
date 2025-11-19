@@ -1890,30 +1890,34 @@ function manageExportSheetEdit(e, sheetNumber)
         if (vendorName !== '')
         {
           const vendorSheet = spreadsheet.getSheetByName(vendorName);
-          const lastCol = vendorSheet.getLastColumn();
-          const data = vendorSheet.getSheetValues(1, 1, vendorSheet.getLastRow(), lastCol);
-          
-          const newSku = sheet.getRange(row, 2, 1, 3).trimWhitespace().getValues()[0];
 
-          if (newSku[2] != '' && newSku[0] != '') // Make sure the description and sku are not blank
+          if (vendorSheet != null)
           {
-            range.setHorizontalAlignment('left')
-            const pntSKU = data[0].indexOf('PNT SKU')
-            const pntDescription = data[0].indexOf('PNT Description')
+            const lastCol = vendorSheet.getLastColumn();
+            const data = vendorSheet.getSheetValues(1, 1, vendorSheet.getLastRow(), lastCol);
+            
+            const newSku = sheet.getRange(row, 2, 1, 3).trimWhitespace().getValues()[0];
 
-            for (var i = 1; i < data.length; i++)
+            if (newSku[2] != '' && newSku[0] != '') // Make sure the description and sku are not blank
             {
-              if (newSku[2] == data[i][pntDescription]) // Found the item in the Vendors database
+              range.setHorizontalAlignment('left')
+              const pntSKU = data[0].indexOf('PNT SKU')
+              const pntDescription = data[0].indexOf('PNT Description')
+
+              for (var i = 1; i < data.length; i++)
               {
-                const itemRange = vendorSheet.getRange(i + 1, 1, 1, lastCol);
-                const itemValues = itemRange.getValues();
-                itemValues[0][pntSKU] = newSku[0];
-                itemRange.setNumberFormat('@').setHorizontalAlignment('left').setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10)
-                  .setFontStyle('normal').setFontWeight('bold').setVerticalAlignment('middle').setBackground(null).setValues(itemValues);
-                const description = getAdagioDescription(i + 1, pntSKU + 1, newSku[0], vendorSheet, vendorSheet.getSheetName());
-                sheet.getRange(row, 4).setHorizontalAlignment('left').setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10)
-                  .setFontStyle('normal').setFontWeight('bold').setVerticalAlignment('middle').setBackground(null).setValue(description);
-                break;
+                if (newSku[2] == data[i][pntDescription]) // Found the item in the Vendors database
+                {
+                  const itemRange = vendorSheet.getRange(i + 1, 1, 1, lastCol);
+                  const itemValues = itemRange.getValues();
+                  itemValues[0][pntSKU] = newSku[0];
+                  itemRange.setNumberFormat('@').setHorizontalAlignment('left').setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10)
+                    .setFontStyle('normal').setFontWeight('bold').setVerticalAlignment('middle').setBackground(null).setValues(itemValues);
+                  const description = getAdagioDescription(i + 1, pntSKU + 1, newSku[0], vendorSheet, vendorSheet.getSheetName());
+                  sheet.getRange(row, 4).setHorizontalAlignment('left').setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10)
+                    .setFontStyle('normal').setFontWeight('bold').setVerticalAlignment('middle').setBackground(null).setValue(description);
+                  break;
+                }
               }
             }
           }
