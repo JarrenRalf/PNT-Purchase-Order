@@ -244,6 +244,20 @@ function createTriggers()
 }
 
 /**
+ * This function clears the export sheet.
+ * 
+ * @author Jarren Ralf
+ */
+function clear()
+{
+  const spreadsheet = SpreadsheetApp.getActive();
+  const sheet = spreadsheet.getActiveSheet()
+  const range = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn());
+  const data = range.getValues();
+  clearExportSheet(data, range, sheet, spreadsheet, true);
+}
+
+/**
  * This function clears the current export sheet of the current data and resets the purchase order header.
  * 
  * @param  {Object[][]}        data : The export data.
@@ -252,7 +266,7 @@ function createTriggers()
  * @param {Spreadsheet} spreadsheet : The active spreadsheet.
  * @author Jarren Ralf
  */
-function clearExportSheet(data, range, sheet, spreadsheet)
+function clearExportSheet(data, range, sheet, spreadsheet, isPageToBeCleared)
 {
   const newValues = [...Array(data.length)].map(e => new Array(data[0].length).fill('')); // This array of blanks is used as if to clear the contents of the sheet
   newValues[0][0] = 'H'
@@ -273,8 +287,11 @@ function clearExportSheet(data, range, sheet, spreadsheet)
     .setFontWeight('bold').setVerticalAlignment('middle').setBackground(null).setValues(data)
 
   range.setNumberFormat('@').setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontStyle('normal').setFontWeight('bold').setVerticalAlignment('middle')
-    .setValues(newValues)
+    //.setValues(newValues)
   sheet.getRange('E2').activate(); // Take the user to user selection dropdown
+
+  if (isPageToBeCleared)
+    range.setValues(newValues)
 }
 
 /**
@@ -423,7 +440,7 @@ function done()
   {
     if (response === cancel)
     {
-      clearExportSheet(values, range, sheet, spreadsheet)
+      clearExportSheet(values, range, sheet, spreadsheet, false)
       ui.showSidebar(HtmlService.createHtmlOutput("<script>google.script.host.close();</script>")) // Close the sidebar
     }
     else
@@ -474,7 +491,7 @@ function done()
 
       if (response === cancel)
       {
-        clearExportSheet(values, range, sheet, spreadsheet)
+        clearExportSheet(values, range, sheet, spreadsheet, false)
         ui.showSidebar(HtmlService.createHtmlOutput("<script>google.script.host.close();</script>")) // Close the sidebar
       }
       else
@@ -482,13 +499,13 @@ function done()
     }
     else // Yellow Alerts only
     {
-      clearExportSheet(values, range, sheet, spreadsheet)
+      clearExportSheet(values, range, sheet, spreadsheet, false)
       downloadButton(sheet, ui)
     }
   }
   else // There are no alerts
   {
-    clearExportSheet(values, range, sheet, spreadsheet)
+    clearExportSheet(values, range, sheet, spreadsheet, false)
     downloadButton(sheet, ui)
   }
 }
@@ -675,37 +692,38 @@ function getAdagioDescriptions(row, range, sheet, sheetName)
 /**
  * This function produces a proposed SKU for a particular Xtratuf product.
  * 
- * @param {String} stockNumber : The stock number of a particular Xtratuf item.
- * @param {String}     size    : The size of a particular Xtratuf item.
+ * @param {String} colorCode : The colour code of the particular Xtratuf item.
+ * @param {String}    size   : The size of a particular Xtratuf item.
  * @return {String} The proposed Xtratuf SKU.
  * @author Jarren Ralf
  */
-function getProposedNewXtratufSKU(stockNumber, size)
+function getProposedNewXtratufSKU(colorCode, size)
 {
   var sku = '';
+  const colourCode = colorCode.toString().split(' ').pop()
 
-  switch (stockNumber.toString().length)
+  switch (colourCode.toString().length)
   {
     case 1:
-      sku += '1011011' + stockNumber.toString() + size.toString().replace(/\./g,'')
+      sku += '1011011' + colourCode + size.toString().replace(/\./g,'')
       break;
     case 2:
-      sku += '101101' + stockNumber.toString() + size.toString().replace(/\./g,'')
+      sku += '101101' + colourCode + size.toString().replace(/\./g,'')
       break;
     case 3:
-      sku += '10110' + stockNumber.toString() + size.toString().replace(/\./g,'')
+      sku += '10110' + colourCode + size.toString().replace(/\./g,'')
       break;
     case 4:
-      sku += '1011' + stockNumber.toString() + size.toString().replace(/\./g,'')
+      sku += '1011' + colourCode + size.toString().replace(/\./g,'')
       break;
     case 5:
-      sku += '101' + stockNumber.toString() + size.toString().replace(/\./g,'')
+      sku += '101' + colourCode + size.toString().replace(/\./g,'')
       break;
     case 6:
-      sku += '10' + stockNumber.toString() + size.toString().replace(/\./g,'')
+      sku += '10' + colourCode + size.toString().replace(/\./g,'')
       break;
     default:
-      sku += '1' + stockNumber.toString() + size.toString().replace(/\./g,'')
+      sku += '1' + colourCode + size.toString().replace(/\./g,'')
   }
 
   return sku;
@@ -968,15 +986,14 @@ function getSkuNotFoundMessage(row, sheet, sheetName)
   }
   else if (sheetName === 'Xtratuf')
   {
-    const xtratufDescription = header.indexOf('Name/Nom/Description')
-    const xtratufCategory = header.indexOf('Category / Catégorie')
-    const xtratufColour = header.indexOf('Color / Couleur')
-    const xtratufSize = header.indexOf('Sizes / Tailles')
-    const xtratufPrice = header.indexOf('Purchase Price/\nPrix d\’achat ')
-    const xtratufSku = header.indexOf('Stock# / Nº de nomenclature')
-    const proposedNewSKU = getProposedNewXtratufSKU(item[xtratufSku], item[xtratufSize])
+    const xtratufDescription = header.indexOf('Style Name')
+    const xtratufColour = header.indexOf('Color Name')
+    const xtratufSize = header.indexOf('Size')
+    const xtratufPrice = header.indexOf('Wholesale Price')
+    const xtratufColorCode = header.indexOf('Color Code')
+    const proposedNewSKU = getProposedNewXtratufSKU(item[xtratufColorCode], item[xtratufSize])
 
-    return item[xtratufDescription] + ' - ' + item[xtratufCategory] + ' - ' + item[xtratufColour]
+    return item[xtratufDescription] + ' - ' + item[xtratufColour]
              + ' - ' + item[xtratufSize] + ' - Cost: $' + Number(item[xtratufPrice]).toFixed(2) + ' - ' + proposedNewSKU;
   }
   else if (sheetName === 'Yeti')
@@ -1003,21 +1020,26 @@ function getVendorName(values)
 {
   const upc = values[0].indexOf("UPC/EAN")
   
-  if (upc !== -1)
+  if (upc !== -1) // Helly Hansen, Grundens and Xtratuf all use the same platform for ordering their products;
   {
     switch (values[1][upc].toString().substring(0, 4))
     {
       case '7040':
         return 'Helly Hansen';
       case '7332':
+      case '7.33':
       case '0840':
+      case '8.40':
+      case '7391':
+      case '7.39':
         return 'Grundens';
+      case '0861':
+      case '1937':
+        return 'Xtratuf';
     }
   }
   else if (values[0].includes("Elastic Order #") && values[0].includes("UPC") && values[0].includes("Shipment Name"))
     return 'HUK';
-  else if (values[18][1] === 'XTRATUF')
-    return 'Xtratuf';
   else if (values[3][4] === 'http://www.yeti.ca')
     return 'Yeti';
   else
@@ -1777,10 +1799,15 @@ function isNotBlank(value)
  */
 function isUPC_A(upcNumber)
 {
-  for (var i = 0, sum = 0, upc = upcNumber.toString(); i < upc.length - 1; i++)
-    sum += (i % 2 === 0) ? Number(upc[i])*3 : Number(upc[i])
+  if (upcNumber.toString().length !== 12)
+    return false;
+  else 
+  {
+    for (var i = 0, sum = 0, upc = upcNumber.toString(); i < upc.length - 1; i++)
+      sum += (i % 2 === 0) ? Number(upc[i])*3 : Number(upc[i])
 
-  return upc.endsWith(Math.ceil(sum/10)*10 - sum)
+    return upc.endsWith(Math.ceil(sum/10)*10 - sum)
+  }
 }
 
 /**
@@ -1792,10 +1819,15 @@ function isUPC_A(upcNumber)
  */
 function isEAN_13(upcNumber)
 {
-  for (var i = 0, sum = 0, upc = upcNumber.toString(); i < upc.length - 1; i++)
-    sum += (i % 2 === 0) ? Number(upc[i]) : Number(upc[i])*3
+  if (upcNumber.toString().length !== 13)
+    return false
+  else 
+  {
+    for (var i = 0, sum = 0, upc = upcNumber.toString(); i < upc.length - 1; i++)
+      sum += (i % 2 === 0) ? Number(upc[i]) : Number(upc[i])*3
 
-  return upc.endsWith(Math.ceil(sum/10)*10 - sum) && upc.length === 13
+    return upc.endsWith(Math.ceil(sum/10)*10 - sum) && upc.length === 13
+  }
 }
 
 /**
@@ -2023,6 +2055,8 @@ function processImportedData(e)
             sheets[sheets.findIndex(sh => sh.getSheetName() === 'Last Import 1')].clearContents().getRange(1, 1, values.length, values[0].length).setNumberFormat('@')
               .setHorizontalAlignment('left').setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10).setFontStyle('normal').setFontWeight('bold')
               .setVerticalAlignment('middle').setBackground(null).setValues(values);
+
+            Logger.log(values)
             var vendorName = getVendorName(values)
 
             spreadsheet.toast('Importing ' + vendorName + '...')
@@ -2040,6 +2074,7 @@ function processImportedData(e)
               sheets[sheets.findIndex(sh => sh.getSheetName() === 'Last Import 2')].clearContents().getRange(1, 1, values.length, values[0].length).setNumberFormat('@')
                 .setHorizontalAlignment('left').setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10).setFontStyle('normal').setFontWeight('bold')
                 .setVerticalAlignment('middle').setBackground(null).setValues(values);
+              Logger.log(values)
               var vendorName = getVendorName(values)
 
               spreadsheet.toast('Importing ' + vendorName + '...')
@@ -2054,13 +2089,13 @@ function processImportedData(e)
         if (sheets[sheet].getSheetName().substring(0, 7) !== "Copy Of") // Don't delete the sheets that are duplicates
           spreadsheet.deleteSheet(sheets[sheet]) // Delete the new sheet that was created
 
-        if (vendorName === 'Xtratuf')
-        {
-          spreadsheet.deleteSheet(spreadsheet.getSheetByName('price list-BG')) // Delete the extra sheets from the Xtratuf excel file
-          spreadsheet.deleteSheet(spreadsheet.getSheetByName('Rocky-Durango-Georgia Boot'))
-          spreadsheet.deleteSheet(spreadsheet.getSheetByName('Price List')) 
-          spreadsheet.deleteSheet(spreadsheet.getSheetByName('price list-OG'))
-        }
+        // if (vendorName === 'Xtratuf')
+        // {
+        //   spreadsheet.deleteSheet(spreadsheet.getSheetByName('price list-BG')) // Delete the extra sheets from the Xtratuf excel file
+        //   spreadsheet.deleteSheet(spreadsheet.getSheetByName('Rocky-Durango-Georgia Boot'))
+        //   spreadsheet.deleteSheet(spreadsheet.getSheetByName('Price List')) 
+        //   spreadsheet.deleteSheet(spreadsheet.getSheetByName('price list-OG'))
+        // }
 
         break;
       }
@@ -3004,12 +3039,12 @@ function updateVendors(spreadsheet, sheets)
        data[s] = range[s].getValues();
       const sku                = data[s][0].indexOf("PNT SKU")
       const description        = data[s][0].indexOf("PNT Description")
-      const xtratufDescription = data[s][0].indexOf("Name/Nom/Description")
-      const xtratufCategory    = data[s][0].indexOf("Category / Catégorie")
-      const xtratufColour      = data[s][0].indexOf("Color / Couleur")
-      const xtratufSize        = data[s][0].indexOf("Sizes / Tailles")
-      const xtratufPrice       = data[s][0].indexOf("Purchase Price/\nPrix d\’achat ")
-      const xtratufSku         = data[s][0].indexOf("Stock# / Nº de nomenclature")
+      const xtratufDescription = data[s][0].indexOf('Style Name')
+      const xtratufColour      = data[s][0].indexOf('Color Name')
+      const xtratufSize        = data[s][0].indexOf("Size")
+      const xtratufPrice       = data[s][0].indexOf("Wholesale Price")
+      const xtratufColorCode   = data[s][0].indexOf('Color Code')
+
       var proposedNewSKU;
 
       for (var i = 1; i < data[s].length; i++)
@@ -3018,8 +3053,8 @@ function updateVendors(spreadsheet, sheets)
         {
           if (data[s][i][sku] === '') data[s][i][sku] = "SKU_NOT_FOUND";
 
-          proposedNewSKU = getProposedNewXtratufSKU(data[s][i][xtratufSku], data[s][i][xtratufSize]);
-          data[s][i][description] = data[s][i][xtratufDescription] + ' - ' + data[s][i][xtratufCategory] + ' - ' + data[s][i][xtratufColour] + 
+          proposedNewSKU = getProposedNewXtratufSKU(data[s][i][xtratufColorCode], data[s][i][xtratufSize]);
+          data[s][i][description] = data[s][i][xtratufDescription] + ' - ' + data[s][i][xtratufColour] + 
                                 ' - ' + data[s][i][xtratufSize] + ' - Cost: $' + Number(data[s][i][xtratufPrice]).toFixed(2) + ' - ' + proposedNewSKU
         }
         else
@@ -3037,9 +3072,9 @@ function updateVendors(spreadsheet, sheets)
           if (j === csvData.length) // SKU was not found in the Adagio data
           {
             data[s][i][sku] = data[s][i][sku].toString().split(' - ', 1)[0] + " - create new?";
-            proposedNewSKU = getProposedNewXtratufSKU(data[s][i][xtratufSku], data[s][i][xtratufSize]);
-            data[s][i][description] = "SKU not in Adagio. " + data[s][i][xtratufDescription] + ' - ' + data[s][i][xtratufCategory] + ' - ' + data[s][i][xtratufColour] + 
-                                  ' - ' + data[s][i][xtratufSize] + ' - Cost: $' + Number(data[s][i][xtratufPrice]).toFixed(2) + ' - ' + proposedNewSKU
+            proposedNewSKU = getProposedNewXtratufSKU(data[s][i][xtratufColorCode], data[s][i][xtratufSize]);
+            data[s][i][description] = "SKU not in Adagio. " + data[s][i][xtratufDescription] + ' - ' + data[s][i][xtratufColour] + 
+                                ' - ' + data[s][i][xtratufSize] + ' - Cost: $' + Number(data[s][i][xtratufPrice]).toFixed(2) + ' - ' + proposedNewSKU
           }
         }
       }
@@ -3108,7 +3143,7 @@ function userHasPressedDelete(value)
 }
 
 /**
- * This function creates the export data for an Xtratuf purchase order.
+ * This function creates the export data for a Xtratuf purchase order. Is able to import multiple purchase orders.
  * 
  * @param {Object[][]}       poData : The purchase order data that was just uploaded.
  * @param {String}          Xtratuf : The name of the vendor, in this case Xtratuf.
@@ -3122,209 +3157,60 @@ function xtratuf(poData, Xtratuf, exportSheet, isRefresh, spreadsheet)
 {
   const xtratufSheet = spreadsheet.getSheetByName('Xtratuf');
   const xtratufData = xtratufSheet.getDataRange().getValues();
-  const poRowNum = 4, headerRowNum = 14;
-  var addToXtratufData = [], proposedNewSKU, poSizeTypeRowNum, size_FromHeader;
+  var addToXtratufData = [], proposedNewSKU;
 
   // Xtratuf Data
-  const stockNum       = xtratufData[0].indexOf("Stock# / Nº de nomenclature"); 
-  const size           = xtratufData[0].indexOf("Sizes / Tailles"); 
-  const cost           = xtratufData[0].indexOf("Purchase Price/\nPrix d\’achat ");
+  const cost           = xtratufData[0].indexOf("Wholesale Price");
+  const xtratufSku     = xtratufData[0].indexOf("XTRATUF SKU"); // Xtratuf manufactures SKU number
   const pntSKU         = xtratufData[0].indexOf("PNT SKU");
   const pntDescription = xtratufData[0].indexOf("PNT Description");
 
   // Purchase Order Data
-  const sku         = poData[headerRowNum].indexOf("Stock# / Nº de nomenclature"); 
-  const brand       = poData[headerRowNum].indexOf("Brand/\nMarque"); 
-  const category    = poData[headerRowNum].indexOf("Category / Catégorie");
-  const description = poData[headerRowNum].indexOf("Name/Nom/Description"); 
-  const colour      = poData[headerRowNum].indexOf('Color / Couleur')
-  const price       = poData[headerRowNum].indexOf("Purchase Price/\nPrix d\’achat "); 
-  const retailPrice = poData[headerRowNum].indexOf("MSRP/\nPDSF $  CAD"); 
-  const poNum       = poData[poRowNum].indexOf("Purchase Order / Bon de commande");
-  const po = reformatPoNumber(poData[poRowNum + 1][poNum].toString());
+  const qty         = poData[0].indexOf("Quantity Requested"); 
+  const poNum       = poData[0].indexOf("PO #");
+  const styleName   = poData[0].indexOf("Style Name");
+  const styleNumber = poData[0].indexOf("Style Number");
+  const color       = poData[0].indexOf("Color Name");
+  const colorCode   = poData[0].indexOf("Color Code");
+  const size        = poData[0].indexOf("Size");
+  const xtraSku     = poData[0].indexOf("SKU");
+  const upc         = poData[0].indexOf("UPC/EAN");
+  const altSize     = poData[0].indexOf("Alt Size");
+  const price       = poData[0].indexOf("Wholesale Price");
+  const gender      = poData[0].indexOf("Gender");
+  const width       = poData[0].indexOf("Width");
+  const po = reformatPoNumber(poData[1][poNum].toString());
   const vendorNumber = getVendorNumber(Xtratuf, spreadsheet);
   var currentEditor = exportSheet.getSheetValues(2, 5, 1, 1)[0][0];
-
-  if (currentEditor === '')
-    currentEditor = 'Someone is currently editing this PO'
-
-  const output = (isRefresh) ? [] : [['H', po, vendorNumber, 'Type your order description in this cell. (40 characters max)', Xtratuf], // Header line
-                                     ['C', 'Type your order comments in this cell. (75 characters max)', null, null, currentEditor]] // Comment Line
   
-  for (var i = headerRowNum + 4; i < poData.length; i++)
+  if (currentEditor === '')
+    currentEditor = 'Someone is currently editing this PO';
+
+  const output = (isRefresh) ? [] : [['H', po, vendorNumber, 'Type your order description in this cell. (40 characters max)', Xtratuf],
+                                     ['C', 'Type your order comments in this cell. (75 characters max)', null, null, currentEditor]]
+
+  for (var i = 1; i < poData.length; i++)
   {
     for (var j = 1; j < xtratufData.length; j++)
     {
-      // Find the item in the Xtratuf data base
-      if (poData[i][sku] == xtratufData[j][stockNum])
+      if (poData[i][xtraSku] == xtratufData[j][xtratufSku])
       {
-        switch (poData[i][category]) // The category determines which row of size types is used
-        {
-          case "Men's / Homme":
-          case "Women's / Femme":
-          case "Unisex":
+        if (isNewPurchaseOrder(poData, i, poNum)) // If a new Purchase Order is detected, then we need to add a new header
+          output.push(['H', po, vendorNumber, 'Type your order description in this cell. (40 characters max)', Xtratuf])
 
-            poSizeTypeRowNum = headerRowNum + 3;
-
-            for (var k = 6; k < 29; k++)
-            {
-              if (isNotBlank(poData[i][k]))
-              {
-                size_FromHeader = poData[poSizeTypeRowNum][k];
-
-                while (poData[i][sku] == xtratufData[j][stockNum])
-                {
-                  if (size_FromHeader == xtratufData[j][size])
-                  {
-                    output.push(['R', xtratufData[j][pntSKU], poData[i][k], xtratufData[j][pntDescription], Number(xtratufData[j][cost]).toFixed(2)]) // Receiving Line
-                    break;
-                  }
-
-                  j++;
-                }
-              }
-            }
-
-            break;
-          case "Kids / Enfants":
-
-            poSizeTypeRowNum = headerRowNum + 2;
-
-            for (var k = 6; k < 24; k++)
-            {
-              if (isNotBlank(poData[i][k]))
-              {
-                size_FromHeader = poData[poSizeTypeRowNum][k];
-
-                while (poData[i][sku] == xtratufData[j][stockNum])
-                {
-                  if (size_FromHeader == xtratufData[j][size])
-                  {
-                    output.push(['R', xtratufData[j][pntSKU], poData[i][k], xtratufData[j][pntDescription], Number(xtratufData[j][cost]).toFixed(2)]) // Receiving Line
-                    break;
-                  }
-                  
-                  j++;
-                }
-              }
-            }
-
-            break;
-          case "APP/ACC":
-
-            poSizeTypeRowNum = headerRowNum + 1;
-
-            for (var k = 6; k < 15; k++)
-            {
-              if (isNotBlank(poData[i][k]))
-              {
-                if (k === 6) // One Size
-                {
-                  output.push(['R', xtratufData[j][pntSKU], poData[i][k], xtratufData[j][pntDescription], Number(xtratufData[j][cost]).toFixed(2)]) // Receiving Line
-                  break;
-                }
-                else
-                {
-                  size_FromHeader = poData[poSizeTypeRowNum][k];
-
-                  while (poData[i][sku] == xtratufData[j][stockNum])
-                  {
-                    if (size_FromHeader == xtratufData[j][size])
-                    {
-                      output.push(['R', xtratufData[j][pntSKU], poData[i][k], xtratufData[j][pntDescription], Number(xtratufData[j][cost]).toFixed(2)]) // Receiving Line
-                      break;
-                    }
-                    
-                    j++;
-                  }
-                }
-              }
-            }
-
-            break;
-        }
-
+        output.push(['R', xtratufData[j][pntSKU], poData[i][qty], xtratufData[j][pntDescription], Number(xtratufData[j][cost]).toFixed(2)]) // Receiving Line
         break;
       }
     }
 
     if (j === xtratufData.length) // The item(s) that were ordered were not found on the Xtratuf data sheet
     {
-      switch (poData[i][category]) // The category determines which row of size types is used
-      {
-        case "Men's / Homme":
-        case "Women's / Femme":
-        case "Unisex":
-
-          poSizeTypeRowNum = headerRowNum + 3;
-
-          for (var k = 6; k < 29; k++)
-          {
-            if (isNotBlank(poData[i][k]))
-            {
-              proposedNewSKU = getProposedNewXtratufSKU(poData[i][stockNum], poData[i][size]);
-
-              addToXtratufData.push([poData[i][sku], poData[i][brand], poData[i][category], poData[i][description], poData[i][colour], poData[poSizeTypeRowNum][k], poData[i][price], 
-                poData[i][retailPrice], 'NEW_ITEM_ADDED', poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] + ' - Cost: $' 
-                + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU])
-              output.push(['R', 'NEW_ITEM_ADDED', poData[i][k], poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] 
-                + ' - Cost: $' + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU, Number(poData[i][price]).toFixed(2)]) // Receiving Line
-            }
-          }
-
-          break;
-        case "Kids / Enfants":
-
-          poSizeTypeRowNum = headerRowNum + 2;
-
-          for (var k = 6; k < 24; k++)
-          {
-            if (isNotBlank(poData[i][k]))
-            {
-              proposedNewSKU = getProposedNewXtratufSKU(poData[i][stockNum], poData[i][size]);
-
-              addToXtratufData.push([poData[i][sku], poData[i][brand], poData[i][category], poData[i][description], poData[i][colour], poData[poSizeTypeRowNum][k], poData[i][price], 
-                poData[i][retailPrice], 'NEW_ITEM_ADDED', poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] + ' - Cost: $' 
-                + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU])
-              output.push(['R', 'NEW_ITEM_ADDED', poData[i][k], poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] 
-                + ' - Cost: $' + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU, Number(poData[i][price]).toFixed(2)]) // Receiving Line
-            }
-          }
-
-          break;
-        case "APP/ACC":
-
-          poSizeTypeRowNum = headerRowNum + 1;
-
-          for (var k = 6; k < 15; k++)
-          {
-            if (isNotBlank(poData[i][k]))
-            {
-              if (k === 6) // One Size 
-              {
-                proposedNewSKU = getProposedNewXtratufSKU(poData[i][stockNum], poData[i][size]);
-
-                addToXtratufData.push([poData[i][sku], poData[i][brand], poData[i][category], poData[i][description], poData[i][colour], poData[i][size], poData[i][price], 
-                  poData[i][retailPrice], 'NEW_ITEM_ADDED', poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[i][size] + ' - Cost: $' 
-                  + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU])
-                output.push(['R', 'NEW_ITEM_ADDED', poData[i][k], poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[i][size] 
-                  + ' - Cost: $' + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU, Number(poData[i][price]).toFixed(2)]) // Receiving Line            
-              }
-              else
-              {
-                proposedNewSKU = getProposedNewXtratufSKU(poData[i][stockNum], poData[i][size]);
- 
-                addToXtratufData.push([poData[i][sku], poData[i][brand], poData[i][category], poData[i][description], poData[i][colour], poData[poSizeTypeRowNum][k], poData[i][price], 
-                  poData[i][retailPrice], 'NEW_ITEM_ADDED', poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] + ' - Cost: $' 
-                  + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU])
-                output.push(['R', 'NEW_ITEM_ADDED', poData[i][k], poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] 
-                  + ' - Cost: $' + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU, Number(poData[i][price]).toFixed(2)]) // Receiving Line
-              }
-            }
-          }
-
-          break;
-      }
+      proposedNewSKU = getProposedNewXtratufSKU(poData[i][colorCode], poData[i][size])
+      addToXtratufData.push([poData[i][styleName], poData[i][styleNumber], poData[i][color], poData[i][colorCode], poData[i][size], poData[i][xtraSku], poData[i][upc], 
+        poData[i][altSize], poData[i][price], poData[i][gender], poData[i][width], 'NEW_ITEM_ADDED', 
+        toProper(poData[i][styleName]) + ' - ' + toProper(poData[i][color]) + ' - '  + poData[i][size] + ' - - - Cost: $' + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU])
+      output.push(['R', 'NEW_ITEM_ADDED', poData[i][qty], toProper(poData[i][styleName]) + ' - ' + toProper(poData[i][color]) + ' - '  + poData[i][size] + 
+        ' - - - Cost: $' + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU, Number(poData[i][price]).toFixed(2)])
     }
   }
 
@@ -3338,6 +3224,238 @@ function xtratuf(poData, Xtratuf, exportSheet, isRefresh, spreadsheet)
 
   return output;
 }
+
+// /**
+//  * This function creates the export data for an Xtratuf purchase order.
+//  * 
+//  * @param {Object[][]}       poData : The purchase order data that was just uploaded.
+//  * @param {String}          Xtratuf : The name of the vendor, in this case Xtratuf.
+//  * @param {Sheet}       exportSheet : The sheet that the data will be exported to.
+//  * @param {Boolean}       isRefresh : A boolean representing whether the user has clicked refresh or not.
+//  * @param {Spreadsheet} spreadsheet : The active spreadsheet.
+//  * @return {Object[][]}      output : The data created for the export sheet.
+//  * @author Jarren Ralf
+//  */
+// function xtratuf(poData, Xtratuf, exportSheet, isRefresh, spreadsheet)
+// {
+//   const xtratufSheet = spreadsheet.getSheetByName('Xtratuf');
+//   const xtratufData = xtratufSheet.getDataRange().getValues();
+//   const poRowNum = 4, headerRowNum = 14;
+//   var addToXtratufData = [], proposedNewSKU, poSizeTypeRowNum, size_FromHeader;
+
+//   // Xtratuf Data
+//   const stockNum       = xtratufData[0].indexOf("Stock# / Nº de nomenclature"); 
+//   const size           = xtratufData[0].indexOf("Sizes / Tailles"); 
+//   const cost           = xtratufData[0].indexOf("Purchase Price/\nPrix d\’achat ");
+//   const pntSKU         = xtratufData[0].indexOf("PNT SKU");
+//   const pntDescription = xtratufData[0].indexOf("PNT Description");
+
+//   // Purchase Order Data
+//   const sku         = poData[headerRowNum].indexOf("Stock# / Nº de nomenclature"); 
+//   const brand       = poData[headerRowNum].indexOf("Brand/\nMarque"); 
+//   const category    = poData[headerRowNum].indexOf("Category / Catégorie");
+//   const description = poData[headerRowNum].indexOf("Name/Nom/Description"); 
+//   const colour      = poData[headerRowNum].indexOf('Color / Couleur')
+//   const price       = poData[headerRowNum].indexOf("Purchase Price/\nPrix d\’achat "); 
+//   const retailPrice = poData[headerRowNum].indexOf("MSRP/\nPDSF $  CAD"); 
+//   const poNum       = poData[poRowNum].indexOf("Purchase Order / Bon de commande");
+//   const po = reformatPoNumber(poData[poRowNum + 1][poNum].toString());
+//   const vendorNumber = getVendorNumber(Xtratuf, spreadsheet);
+//   var currentEditor = exportSheet.getSheetValues(2, 5, 1, 1)[0][0];
+
+//   if (currentEditor === '')
+//     currentEditor = 'Someone is currently editing this PO'
+
+//   const output = (isRefresh) ? [] : [['H', po, vendorNumber, 'Type your order description in this cell. (40 characters max)', Xtratuf], // Header line
+//                                      ['C', 'Type your order comments in this cell. (75 characters max)', null, null, currentEditor]] // Comment Line
+  
+//   for (var i = headerRowNum + 4; i < poData.length; i++)
+//   {
+//     for (var j = 1; j < xtratufData.length; j++)
+//     {
+//       // Find the item in the Xtratuf data base
+//       if (poData[i][sku] == xtratufData[j][stockNum])
+//       {
+//         switch (poData[i][category]) // The category determines which row of size types is used
+//         {
+//           case "Men's / Homme":
+//           case "Women's / Femme":
+//           case "Unisex":
+
+//             poSizeTypeRowNum = headerRowNum + 3;
+
+//             for (var k = 6; k < 29; k++)
+//             {
+//               if (isNotBlank(poData[i][k]))
+//               {
+//                 size_FromHeader = poData[poSizeTypeRowNum][k];
+
+//                 while (poData[i][sku] == xtratufData[j][stockNum])
+//                 {
+//                   if (size_FromHeader == xtratufData[j][size])
+//                   {
+//                     output.push(['R', xtratufData[j][pntSKU], poData[i][k], xtratufData[j][pntDescription], Number(xtratufData[j][cost]).toFixed(2)]) // Receiving Line
+//                     break;
+//                   }
+
+//                   j++;
+//                 }
+//               }
+//             }
+
+//             break;
+//           case "Kids / Enfants":
+
+//             poSizeTypeRowNum = headerRowNum + 2;
+
+//             for (var k = 6; k < 24; k++)
+//             {
+//               if (isNotBlank(poData[i][k]))
+//               {
+//                 size_FromHeader = poData[poSizeTypeRowNum][k];
+
+//                 while (poData[i][sku] == xtratufData[j][stockNum])
+//                 {
+//                   if (size_FromHeader == xtratufData[j][size])
+//                   {
+//                     output.push(['R', xtratufData[j][pntSKU], poData[i][k], xtratufData[j][pntDescription], Number(xtratufData[j][cost]).toFixed(2)]) // Receiving Line
+//                     break;
+//                   }
+                  
+//                   j++;
+//                 }
+//               }
+//             }
+
+//             break;
+//           case "APP/ACC":
+
+//             poSizeTypeRowNum = headerRowNum + 1;
+
+//             for (var k = 6; k < 15; k++)
+//             {
+//               if (isNotBlank(poData[i][k]))
+//               {
+//                 if (k === 6) // One Size
+//                 {
+//                   output.push(['R', xtratufData[j][pntSKU], poData[i][k], xtratufData[j][pntDescription], Number(xtratufData[j][cost]).toFixed(2)]) // Receiving Line
+//                   break;
+//                 }
+//                 else
+//                 {
+//                   size_FromHeader = poData[poSizeTypeRowNum][k];
+
+//                   while (poData[i][sku] == xtratufData[j][stockNum])
+//                   {
+//                     if (size_FromHeader == xtratufData[j][size])
+//                     {
+//                       output.push(['R', xtratufData[j][pntSKU], poData[i][k], xtratufData[j][pntDescription], Number(xtratufData[j][cost]).toFixed(2)]) // Receiving Line
+//                       break;
+//                     }
+                    
+//                     j++;
+//                   }
+//                 }
+//               }
+//             }
+
+//             break;
+//         }
+
+//         break;
+//       }
+//     }
+
+//     if (j === xtratufData.length) // The item(s) that were ordered were not found on the Xtratuf data sheet
+//     {
+//       switch (poData[i][category]) // The category determines which row of size types is used
+//       {
+//         case "Men's / Homme":
+//         case "Women's / Femme":
+//         case "Unisex":
+
+//           poSizeTypeRowNum = headerRowNum + 3;
+
+//           for (var k = 6; k < 29; k++)
+//           {
+//             if (isNotBlank(poData[i][k]))
+//             {
+//               proposedNewSKU = getProposedNewXtratufSKU(poData[i][stockNum], poData[i][size]);
+
+//               addToXtratufData.push([poData[i][sku], poData[i][brand], poData[i][category], poData[i][description], poData[i][colour], poData[poSizeTypeRowNum][k], poData[i][price], 
+//                 poData[i][retailPrice], 'NEW_ITEM_ADDED', poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] + ' - Cost: $' 
+//                 + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU])
+//               output.push(['R', 'NEW_ITEM_ADDED', poData[i][k], poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] 
+//                 + ' - Cost: $' + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU, Number(poData[i][price]).toFixed(2)]) // Receiving Line
+//             }
+//           }
+
+//           break;
+//         case "Kids / Enfants":
+
+//           poSizeTypeRowNum = headerRowNum + 2;
+
+//           for (var k = 6; k < 24; k++)
+//           {
+//             if (isNotBlank(poData[i][k]))
+//             {
+//               proposedNewSKU = getProposedNewXtratufSKU(poData[i][stockNum], poData[i][size]);
+
+//               addToXtratufData.push([poData[i][sku], poData[i][brand], poData[i][category], poData[i][description], poData[i][colour], poData[poSizeTypeRowNum][k], poData[i][price], 
+//                 poData[i][retailPrice], 'NEW_ITEM_ADDED', poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] + ' - Cost: $' 
+//                 + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU])
+//               output.push(['R', 'NEW_ITEM_ADDED', poData[i][k], poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] 
+//                 + ' - Cost: $' + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU, Number(poData[i][price]).toFixed(2)]) // Receiving Line
+//             }
+//           }
+
+//           break;
+//         case "APP/ACC":
+
+//           poSizeTypeRowNum = headerRowNum + 1;
+
+//           for (var k = 6; k < 15; k++)
+//           {
+//             if (isNotBlank(poData[i][k]))
+//             {
+//               if (k === 6) // One Size 
+//               {
+//                 proposedNewSKU = getProposedNewXtratufSKU(poData[i][stockNum], poData[i][size]);
+
+//                 addToXtratufData.push([poData[i][sku], poData[i][brand], poData[i][category], poData[i][description], poData[i][colour], poData[i][size], poData[i][price], 
+//                   poData[i][retailPrice], 'NEW_ITEM_ADDED', poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[i][size] + ' - Cost: $' 
+//                   + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU])
+//                 output.push(['R', 'NEW_ITEM_ADDED', poData[i][k], poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[i][size] 
+//                   + ' - Cost: $' + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU, Number(poData[i][price]).toFixed(2)]) // Receiving Line            
+//               }
+//               else
+//               {
+//                 proposedNewSKU = getProposedNewXtratufSKU(poData[i][stockNum], poData[i][size]);
+ 
+//                 addToXtratufData.push([poData[i][sku], poData[i][brand], poData[i][category], poData[i][description], poData[i][colour], poData[poSizeTypeRowNum][k], poData[i][price], 
+//                   poData[i][retailPrice], 'NEW_ITEM_ADDED', poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] + ' - Cost: $' 
+//                   + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU])
+//                 output.push(['R', 'NEW_ITEM_ADDED', poData[i][k], poData[i][description] + ' - ' + poData[i][category] + ' - ' + poData[i][colour] + ' - ' + poData[poSizeTypeRowNum][k] 
+//                   + ' - Cost: $' + Number(poData[i][price]).toFixed(2) + ' - ' + proposedNewSKU, Number(poData[i][price]).toFixed(2)]) // Receiving Line
+//               }
+//             }
+//           }
+
+//           break;
+//       }
+//     }
+//   }
+
+//   if (addToXtratufData.length !== 0) // Add items to the Xtratuf data that were on the PO but not in the Xtratuf data
+//   {
+//     xtratufSheet.showSheet().getRange(xtratufSheet.getLastRow() + 1, 1, addToXtratufData.length, addToXtratufData[0].length).activate().setHorizontalAlignment('left')
+//       .setFontColor('black').setFontFamily('Arial').setFontLine('none').setFontSize(10).setFontStyle('normal').setFontWeight('bold').setVerticalAlignment('middle').setBackground(null)
+//       .setValues(addToXtratufData)
+//     spreadsheet.toast('Add PNT SKUs to the Xtratuf data.', '⚠️ New Xtratuf Items ⚠️', 30)
+//   }
+
+//   return output;
+// }
 
 // /**
 //  * This function creates the export data for a Yeti purchase order.
